@@ -1,6 +1,6 @@
 {
   "name": "nor-mvc",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Sendanor Model-View-Controller Module",
   "main": "src/mvc.js",
   "scripts": {
@@ -28,6 +28,7 @@
 	"q": ">= 1.0.1 <1.1.0",
 	"nor-debug": ">= 0.1.24 <0.2.0",
 	"nor-is": ">= 0.1.10 <0.2.0",
+	"nor-fs": ">= 0.1.5 <0.2.0",
 	"nor-express": ">= 0.1.26 <0.2.0"
   }
 }

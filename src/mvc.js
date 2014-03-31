@@ -5,6 +5,116 @@ var Q = require('q');
 var debug = require('nor-debug');
 var is = require('nor-is');
 var PATH = require('path');
+var FS = require('nor-fs');
+
+/** Returns a predicate function for testing path extensions */
+function has_extension(e) {
+	debug.assert(e).is('string');
+	return function(p) {
+		return PATH.extname(p) === e;
+	};
+}
+
+/** Returns a predicate function for testing sub extensions */
+function has_sub_extension(e) {
+	debug.assert(e).is('string');
+	return function(p) {
+		var name = PATH.basename(p, PATH.extname(p));
+		return PATH.extname(name) === e;
+	};
+}
+
+/** Returns a predicate `function(path)` that will return `true` if path is a directory */
+function is_directory(p) {
+	var stats = FS.sync.stat(p);
+	return stats.isDirectory() ? true : false;
+}
+
+/** Returns a predicate `function(path)` that will return `true` if result of `f(p)` was `false`, otherwise returns `false`. */
+function is_not(f) {
+	debug.assert(f).is('function');
+	return function(p) {
+		return f(p) ? false : true;
+	};
+}
+
+/** Returns a predicate `function(path)` that will return `true` if result of `f1(p)` and `f2(p)` was `true`, otherwise returns `false`. */
+function and(f1, f2) {
+	debug.assert(f1).is('function');
+	debug.assert(f2).is('function');
+	return function(p) {
+		return (f1(p) && f2(p)) ? true : false;
+	};
+}
+
+/** Returns a predicate `function(path)` that will return `true` if result of `f1(p)` or `f2(p)` was `true`, otherwise returns `false`. */
+function or(f1, f2) {
+	debug.assert(f1).is('function');
+	debug.assert(f2).is('function');
+	return function(p) {
+		return (f1(p) || f2(p)) ? true : false;
+	};
+}
+
+/** Search and require all files from path
+ * @returns {object} All files in an object using `require()` by basenames
+ */
+function search_and_require(path, opts) {
+	opts = opts || {};
+	debug.assert(path).is('string');
+	debug.assert(opts).is('object');
+
+	var primary_ext = opts.extension || '.js';
+	var sub_ext = opts.sub_extension;
+	var parent_name = opts.parent_name;
+
+	debug.assert(primary_ext).is('string');
+	debug.assert(sub_ext).ignore(undefined).is('string');
+
+	if(! is_directory(path) ) {
+		return require(path);
+	}
+
+	var result = opts.result || {};
+
+	debug.assert(result).is('object');
+
+	var files = FS.sync.readdir(path).map(function(file) {
+		return PATH.join(path, file);
+	});
+
+	files.filter(or(has_extension(primary_ext), sub_ext ? has_sub_extension(sub_ext) : function() { return false; } )).forEach(function(file) {
+		var name = PATH.basename(file, PATH.extname(file));
+		if( sub_ext && has_extension(sub_ext)(name) ) {
+			name = PATH.basename(name, sub_ext);
+		}
+		if(parent_name) {
+			name = [parent_name, name].join('.');
+		}
+		if(result[name] !== undefined) {
+			debug.warn('Multiple files conflicted for ', name, ' -- later takes preference: ', file );
+		}
+		result[name] = require( file );
+	});
+
+	files.filter(is_directory).forEach(function(dir) {
+		var name = PATH.basename(dir);
+		if(parent_name) {
+			name = [parent_name, name].join('.');
+		}
+		if(result[name] !== undefined) {
+			debug.warn('Multiple files conflicted for ', name, ' -- directory takes preference: ', dir);
+		}
+		search_and_require(dir, {
+			'extension': primary_ext,
+			'sub_extension': sub_ext,
+			'parent_name': name,
+			'result': result
+		});
+	});
+
+	return result;
+}
 
 /* Function that does nothing */
 function noop() {}
@@ -15,20 +125,27 @@ function MVC (opts) {
 	debug.assert(opts).is('object');
 	debug.assert(opts.model).ignore(undefined).is('function');
 	debug.assert(opts.layout).ignore(undefined).is('function');
-	debug.assert(opts.view).ignore(undefined).is('function');
+	debug.assert(opts.index).ignore(undefined).is('function');
 	debug.assert(opts.routes).ignore(undefined).is('string');
 	debug.assert(opts.filename).is('string');
 
-	this.filename = opts.filename;
+	var self = this;
+
+	self.filename = opts.filename;
 
 	if(!opts.dirname) {
-		this.dirname = PATH.dirname(opts.filename);
+		self.dirname = PATH.dirname(opts.filename);
 	}
 
-	this.model = opts.model || noop;
-	this.layout = opts.layout || require('./mvc.layout.ejs');
-	this.routes = opts.routes;
-	this.view = opts.view || noop;
+	self.model = opts.model || noop;
+	self.layout = opts.layout || require('./mvc.layout.ejs');
+	self.routes = opts.routes;
+	self.index = opts.index || noop;
+
+	if(!self.views) {
+		self.views = search_and_require(self.dirname, {'extension':'.ejs', 'sub_extension': '.view'});
+	}
+
 }
 
 module.exports = MVC;
@@ -39,12 +156,12 @@ MVC.create = function mvc_create(opts) {
 };
 
 /** Returns our nor-express style `function(req, res)` implementation which returns promises */
-MVC.render = function mvc_render(mvc, params) {
+MVC.render = function mvc_render(mvc, params, opts) {
 	mvc = mvc || {};
 	debug.assert(mvc).is('object').instanceOf(MVC);
 	debug.assert(mvc.model).is('function');
 	debug.assert(mvc.layout).is('function');
-	debug.assert(mvc.view).is('function');
+	debug.assert(mvc.index).is('function');
 	debug.assert(mvc.dirname).is('string');
 
 	var model;
@@ -52,14 +169,21 @@ MVC.render = function mvc_render(mvc, params) {
 
 	debug.assert(params).is('object');
 
+	opts = opts || {};
+	debug.assert(opts).is('object');
+
+	var view = opts.view || mvc.index;
+
+	debug.assert(view).is('function');
+
 	return Q(mvc.model(params)).then(function(m) {
 		model = m;
 		if(!is.obj(model)) {
 			model = {};
 		}
-		return mvc.view({'$': model});
+		return view({'$': model, 'self': mvc});
 	}).then(function(body) {
-		return mvc.layout({'$': model, 'body':body});
+		return mvc.layout({'$': model, 'self': mvc, 'body':body});
 	});
 };
 
@@ -69,7 +193,7 @@ MVC.toNorExpress = function to_nor_express(mvc, opts) {
 	debug.assert(mvc).is('object').instanceOf(MVC);
 	debug.assert(mvc.model).is('function');
 	debug.assert(mvc.layout).is('function');
-	debug.assert(mvc.view).is('function');
+	debug.assert(mvc.index).is('function');
 
 	return function handle_request(req, res) {
 		var url = require('url').parse(req.url, true);
@@ -126,5 +250,14 @@ MVC.prototype.toRoutes = function to_routes() {
 	throw new TypeError("Unsupported type for self.routes: " +  (typeof self.routes));
 };
 
+/** Get a view function by name */
+MVC.prototype.view = function(name) {
+	var self = this;
+	var view = self.views[name];
+	debug.assert(view).is('function');
+	return function(params) {
+		return view({'$':params, 'self':self});
+	};
+};
 
 /* EOF */
