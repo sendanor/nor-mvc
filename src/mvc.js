@@ -232,7 +232,11 @@ MVC.prototype.toRoutes = function to_routes() {
 	            return false;
 	        },
 	        'accept': function(filename, state) {
+				//debug.log('filename = ', filename);
 				if(state.directory) { return true; }
+	            if( (PATH.basename(filename) === 'browser.js') || ((filename.length >= ('.browser.js'.length +1)) && filename.substr(filename.length - '.browser.js'.length) === '.browser.js') ) {
+					return false;
+				}
 	            return ( (filename.length >= 4) && filename.substr(filename.length - '.js'.length) === '.js') ? true : false;
 	        },
 			'routes': routes
