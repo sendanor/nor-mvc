@@ -6,136 +6,9 @@ var debug = require('nor-debug');
 var is = require('nor-is');
 var PATH = require('path');
 var FS = require('nor-fs');
-
-/** Returns a predicate function for testing path extensions */
-function has_extension(e) {
-	if(process.env.DEBUG_MVC) {
-		debug.log('has_extension(', e, ')');
-	}
-	debug.assert(e).is('string');
-	return function has_extension_2(p) {
-		return PATH.extname(p) === e;
-	};
-}
-
-/** Returns a predicate function for testing sub extensions */
-function has_sub_extension(e) {
-	if(process.env.DEBUG_MVC) {
-		debug.log('has_sub_extension(', e, ')');
-	}
-	debug.assert(e).is('string');
-	return function has_sub_extension_2(p) {
-		var name = PATH.basename(p, PATH.extname(p));
-		return PATH.extname(name) === e;
-	};
-}
-
-/** Returns a predicate `function(path)` that will return `true` if path is a directory */
-function is_directory(p) {
-	if(process.env.DEBUG_MVC) {
-		debug.log('is_directory(', p, ')');
-	}
-	var stats = FS.sync.stat(p);
-	return stats.isDirectory() ? true : false;
-}
-
-/** Returns a predicate `function(path)` that will return `true` if result of `f(p)` was `false`, otherwise returns `false`. */
-function is_not(f) {
-	if(process.env.DEBUG_MVC) {
-		debug.log('is_not(', f, ')');
-	}
-	debug.assert(f).is('function');
-	return function is_not_2(p) {
-		return f(p) ? false : true;
-	};
-}
-
-/** Returns a predicate `function(path)` that will return `true` if result of `f1(p)` and `f2(p)` was `true`, otherwise returns `false`. */
-function and(f1, f2) {
-	if(process.env.DEBUG_MVC) {
-		debug.log('and(', f1, ',', f2, ')');
-	}
-	debug.assert(f1).is('function');
-	debug.assert(f2).is('function');
-	return function and_2(p) {
-		return (f1(p) && f2(p)) ? true : false;
-	};
-}
-
-/** Returns a predicate `function(path)` that will return `true` if result of `f1(p)` or `f2(p)` was `true`, otherwise returns `false`. */
-function or(f1, f2) {
-	if(process.env.DEBUG_MVC) {
-		debug.log('or(', f1, ',', f2, ')');
-	}
-	debug.assert(f1).is('function');
-	debug.assert(f2).is('function');
-	return function or_2(p) {
-		return (f1(p) || f2(p)) ? true : false;
-	};
-}
-
-/** Search and require all files from path
- * @returns {object} All files in an object using `require()` by basenames
- */
-function search_and_require(path, opts) {
-	if(process.env.DEBUG_MVC) {
-		debug.log('search_and_require(', path, ',', opts, ')');
-	}
-	opts = opts || {};
-	debug.assert(path).is('string');
-	debug.assert(opts).is('object');
-
-	var primary_ext = opts.extension || '.js';
-	var sub_ext = opts.sub_extension;
-	var parent_name = opts.parent_name;
-
-	debug.assert(primary_ext).is('string');
-	debug.assert(sub_ext).ignore(undefined).is('string');
-
-	if(! is_directory(path) ) {
-		return require(path);
-	}
-
-	var result = opts.result || {};
-
-	debug.assert(result).is('object');
-
-	var files = FS.sync.readdir(path).map(function join_path(file) {
-		return PATH.join(path, file);
-	});
-
-	files.filter(or(has_extension(primary_ext), sub_ext ? has_sub_extension(sub_ext) : function nul() { return false; } )).forEach(function each(file) {
-		var name = PATH.basename(file, PATH.extname(file));
-		if( sub_ext && has_extension(sub_ext)(name) ) {
-			name = PATH.basename(name, sub_ext);
-		}
-		if(parent_name) {
-			name = [parent_name, name].join('.');
-		}
-		if(result[name] !== undefined) {
-			debug.warn('Multiple files conflicted for ', name, ' -- later takes preference: ', file );
-		}
-		result[name] = require( file );
-	});
-
-	files.filter(is_directory).forEach(function each_2(dir) {
-		var name = PATH.basename(dir);
-		if(parent_name) {
-			name = [parent_name, name].join('.');
-		}
-		if(result[name] !== undefined) {
-			debug.warn('Multiple files conflicted for ', name, ' -- directory takes preference: ', dir);
-		}
-		search_and_require(dir, {
-			'extension': primary_ext,
-			'sub_extension': sub_ext,
-			'parent_name': name,
-			'result': result
-		});
-	});
-
-	return result;
-}
+var require_browserify = require('./require-browserify.js');
+var search_and_require = require('./search-and-require.js');
+var default_layout = require('./mvc.layout.ejs');
 
 /* Function that does nothing */
 function noop() {}
@@ -162,14 +35,20 @@ function MVC (opts) {
 	}
 
 	self.model = opts.model || noop;
-	self.layout = opts.layout || require('./mvc.layout.ejs');
+	self.layout = opts.layout || default_layout;
 	self.routes = opts.routes;
 	self.index = opts.index || noop;
 	//self.view = opts.view || PATH.basename(self.filename, PATH.extname(self.filename));
 
 	if(!self.views) {
-		self.views = search_and_require(self.dirname, {'extension':'.ejs', 'sub_extension': '.view'});
-		debug.info('views (from ', self.dirname,') detected: ', self.views);
+		if(!process.browser) {
+			self.views = search_and_require(self.dirname, {'extension':'.ejs', 'sub_extension': '.view'});
+			if(process.env.DEBUG_MVC) {
+				debug.info('views (from ', self.dirname,') detected: ', self.views);
+			}
+		} else {
+			self.views = require('nor-mvc-self').views;
+		}
 	}
 
 }
@@ -220,6 +99,7 @@ MVC.render = function mvc_render(mvc, params, opts) {
 };
 
 /** Returns our nor-express style `function(req, res)` implementation which returns promises */
+if(!process.browser) {
 MVC.toNorExpress = function to_nor_express(mvc, opts) {
 	if(process.env.DEBUG_MVC) {
 		debug.log('MVC.toNorExpress(', mvc, ', ', opts, ')');
@@ -236,8 +116,10 @@ MVC.toNorExpress = function to_nor_express(mvc, opts) {
 		return MVC.render(mvc, params);
 	};
 };
+}
 
 /** Returns Node.js style `function(req, res, next)` */
+if(!process.browser) {
 MVC.prototype.toNorExpress = function to_nor_express_method(opts) {
 	var self = this;
 	if(process.env.DEBUG_MVC) {
@@ -245,8 +127,10 @@ MVC.prototype.toNorExpress = function to_nor_express_method(opts) {
 	}
 	return MVC.toNorExpress(self, opts);
 };
+}
 
 /** Returns our nor-express style route object */
+if(!process.browser) {
 MVC.prototype.toRoutes = function to_routes() {
 	var self = this;
 	if(process.env.DEBUG_MVC) {
@@ -262,43 +146,74 @@ MVC.prototype.toRoutes = function to_routes() {
 	if(is.string(self.routes)) {
 
 		if( PATH.basename(self.filename, '.js') !== 'index' ) {
-			debug.log('MVC{', self.filename,'} routes = ', routes);
+			if(process.env.DEBUG_MVC) {
+				debug.log('MVC{', self.filename,'} routes = ', routes);
+			}
 			return routes;
 		}
 
-		debug.log('MVC{', self.filename,'} loading routes from ', self.dirname);
+		if(process.env.DEBUG_MVC) {
+			debug.log('MVC{', self.filename,'} loading routes from ', self.dirname);
+		}
 
 	    routes = require('nor-express').routes.load( PATH.resolve(self.dirname, self.routes), {
+			/** Makes it possible to handle the require of accepted files (and enable support for other types) */
+			'require': function require_wrapper(filename) {
+				if(PATH.basename(filename) !== 'browser.js') {
+					return require(filename);
+				}
+
+				var basedir = PATH.dirname(filename);
+				var mvc;
+				if(self.dirname === basedir) {
+					mvc = self;
+				} else {
+					mvc = require(PATH.resolve(basedir, 'index.js'));
+				}
+
+				return require_browserify(filename, {
+					'mvc': mvc,
+					'basedir': basedir
+				});
+			},
 	        'ignore': function ignore(filename) {
 	            return false;
 	        },
 	        'accept': function accept(filename, state) {
 				//debug.log('filename = ', filename);
 				if(state.directory) { return true; }
-	            if( (PATH.basename(filename) === 'browser.js') || ((filename.length >= ('.browser.js'.length +1)) && filename.substr(filename.length - '.browser.js'.length) === '.browser.js') ) {
+	            if( /* (PATH.basename(filename) === 'browser.js') || */ ((filename.length >= ('.browser.js'.length +1)) && filename.substr(filename.length - '.browser.js'.length) === '.browser.js') ) {
 					return false;
 				}
 	            return ( (filename.length >= 4) && filename.substr(filename.length - '.js'.length) === '.js') ? true : false;
 	        },
 			'routes': routes
     	});
-		debug.log('MVC{', self.filename,'} routes = ', routes);
+
+		if(process.env.DEBUG_MVC) {
+			debug.log('MVC{', self.filename,'} routes = ', routes);
+		}
 		return routes;
 	}
 
 	if(is.func(self.routes)) {
 		routes = self.routes();
-		debug.log('MVC{', self.filename,'} routes = ', routes);
+		if(process.env.DEBUG_MVC) {
+			debug.log('MVC{', self.filename,'} routes = ', routes);
+		}
 		return routes;
 	}
 
 	if(is.obj(self.routes)) {
-		debug.log('MVC{', self.filename,'} routes = ', self.routes);
+		if(process.env.DEBUG_MVC) {
+			debug.log('MVC{', self.filename,'} routes = ', self.routes);
+		}
 		return self.routes;
 	}
 
 	throw new TypeError("Unsupported type for self.routes: " +  (typeof self.routes));
 };
+}
 
 /** Get a view function by name */
 MVC.prototype.view = function mvc_view_method(name) {
@@ -308,8 +223,23 @@ MVC.prototype.view = function mvc_view_method(name) {
 	}
 	var view = self.views[name];
 	debug.assert(view).is('function');
-	return function mvc_view_method_2(params) {
-		return view({'$':params, 'self':self});
+	return function mvc_view_method_2(context, params) {
+		context = context || {};
+		debug.assert(context).is('object');
+		debug.assert(params).ignore(undefined).is('object');
+		if(!is.obj(context.$)) {
+			context.$ = {};
+		}
+		if(is.obj(params)) {
+			Object.keys(params).forEach(function(key) {
+				context.$[key] = params[key];
+			});
+		}
+		if(!context.self) {
+			context.self = self;
+		}
+		//debug.log('context = ' , context);
+		return view(context);
 	};
 };
 
