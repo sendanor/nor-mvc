@@ -11,7 +11,9 @@ var browserify = require('browserify')
 
 /** Simply builds a bundle and returns it */
 function do_browserify_bundle(b, opts) {
-	debug.log('step 3');
+	if(process.env.DEBUG_MVC) {
+		debug.log('step 3');
+	}
 	opts = opts || {};
 	debug.assert(b).is('object');
 	debug.assert(opts).is('object');
@@ -72,7 +74,9 @@ function get_object_as_stream(obj) {
  */
 var mktempdir = Q.denodeify(require('temp').mkdir);
 
-/** Returns a promise of an object with a property `file` pointing to temporary file containing the object `obj` and method `.clean()` to clean it. */
+/** Returns a promise of an object with a property `file` pointing to temporary file containing the object `obj` and method `.clean()` to clean it.
+ * FIXME: Convert sync methods into async
+ */
 function get_object_as_temp_file(obj, basedir) {
 
 	debug.assert(obj).is('object');
@@ -84,6 +88,9 @@ function get_object_as_temp_file(obj, basedir) {
 
 	function wrap(data) {
 		debug.assert(data).is('object');
+		//if(process.env.DEBUG_MVC) {
+			//debug.log('data = ', data);
+		//}
 		var mod = copy(data);
 		mod.browser = true;
 		delete mod.filename;
@@ -130,11 +137,18 @@ function get_object_as_temp_file(obj, basedir) {
 	});
 }
 
+/** Build browserify bundle */
+function build_bundle(entry_file, opts) {
+	var build_completed = false;
 
-/** Returns a predicate function for testing path extensions */
-var require_browserify = module.exports = function require_browserify(entry_file, opts) {
-	debug.log('step 1');
-	
+	if(!process.env.DISABLE_MVC_MESSAGES) {
+		debug.info('Building using browserify: ', entry_file);
+	}
+
+	if(process.env.DEBUG_MVC) {
+		debug.log('step 1');
+	}
+
 	debug.assert(entry_file).is('string');
 
 	opts = opts || {};
@@ -163,49 +177,73 @@ var require_browserify = module.exports = function require_browserify(entry_file
 	b.transform({ global: true }, 'browserify-ejs');
 	b.transform({ global: true }, 'envify');
 	
-	return function step_2(req, res) {
+	if(process.env.DEBUG_MVC) {
 		debug.log('step 2');
-		var _tmpfile = {'clean': function() {}};
-		return Q.fcall(function() {
-			if(!opts.mvc) { return; }
-			return get_object_as_temp_file(opts.mvc, opts.basedir).then(function(result) {
-				_tmpfile = result;
-				//b.add(result.file);
-				b.require(result.file, {'expose':'nor-mvc-self'});
-			});
-		}).then(function() {
-			return get_times(opts.entries);
-		}).then(function(modified) {
+	}
+
+	var _tmpfile = {'clean': function() {}};
+	return Q.fcall(function() {
+		if(!opts.mvc) { return; }
+		return get_object_as_temp_file(opts.mvc, opts.basedir).then(function(result) {
+			_tmpfile = result;
+			//b.add(result.file);
+			b.require(result.file, {'expose':'nor-mvc-self'});
+		});
+	}).then(function() {
+		return get_times(opts.entries);
+	}).then(function(modified) {
+		if(process.env.DEBUG_MVC) {
 			debug.log('modified = ', modified);
 			debug.log('cache = ', cache);
+		}
 
-			var no_cached_bundle = !!(cache.body === undefined);
-			var files_changed = !!(modified.map(function(d, i) {
-				return !!( d !== cache.modified[i] );
-			}).some(function(x) {
-				return x === true;
-			}));
-			var build_bundle = !!( no_cached_bundle || files_changed );
+		var no_cached_bundle = !!(cache.body === undefined);
+		var files_changed = !!(modified.map(function(d, i) {
+			return !!( d !== cache.modified[i] );
+		}).some(function(x) {
+			return x === true;
+		}));
+		var build_bundle = !!( no_cached_bundle || files_changed );
 	
+		if(process.env.DEBUG_MVC) {
 			debug.log('no_cached_bundle = ', no_cached_bundle);
 			debug.log('files_changed = ', files_changed);
 			debug.log('build_bundle = ', build_bundle);
+		}
 	
-			if(build_bundle) {
-				return do_browserify_bundle(b).then(function(body) {
-					cache.modified = modified;
-					cache.body = body;
-					return body;
-				});
-			}
-			return cache.body;
+		if(build_bundle) {
+			return do_browserify_bundle(b).then(function(body) {
+				cache.modified = modified;
+				cache.body = body;
+				return body;
+			});
+		}
+		return cache.body;
 
-		}).then(function(body) {
+	}).then(function(body) {
+		build_completed = true;
+
+		if(!process.env.DISABLE_MVC_MESSAGES) {
+			debug.info('Browserify build successful for ', entry_file);
+		}
+
+		return body;
+	}).fin(function() {
+		if( (!build_completed) && (!process.env.DISABLE_MVC_ERRORS)) {
+			debug.error('Browserify build failed for file ', entry_file);
+		}
+		_tmpfile.clean();
+	});
+}
+
+/** Returns a predicate function for testing path extensions */
+var require_browserify = module.exports = function require_browserify(entry_file, opts) {
+	var bundle = build_bundle(entry_file, opts);
+	return function step_2(req, res) {
+		return bundle.then(function(body) {
 			/* Please note: application/javascript would be 'right' but apparently IE6-8 do not support it. Not tested, though. Let's test it. */
 			res.header('content-type', 'application/javascript; charset=UTF-8');
 			res.send(body);
-		}).fin(function() {
-			_tmpfile.clean();
 		});
 	};
 };

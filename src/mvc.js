@@ -6,12 +6,57 @@ var debug = require('nor-debug');
 var is = require('nor-is');
 var PATH = require('path');
 var FS = require('nor-fs');
+var copy2 = require('nor-data').copy2;
 var require_browserify = require('./require-browserify.js');
 var search_and_require = require('./search-and-require.js');
 var default_layout = require('./mvc.layout.ejs');
 
 /* Function that does nothing */
 function noop() {}
+
+/** Copy context object */
+function copy_context(orig_context, params, mvc, query_params) {
+	debug.assert(orig_context).is('object');
+	debug.assert(params).ignore(undefined).is('object');
+
+	var context = {};
+	Object.keys(orig_context).filter(function(key) {
+		return !!( (key !== 'context') && (key !== 'node') && (key !== 'self') );
+	}).forEach(function(key) {
+		context[key] = copy2(orig_context[key]);
+	});
+
+	context.context = context;
+
+	if(!is.obj(context.$)) {
+		context.$ = {};
+	}
+
+	if(is.obj(params)) {
+		Object.keys(params).forEach(function(key) {
+			context.$[key] = copy2(params[key]);
+		});
+	}
+
+	if( (!context.node) && orig_context.node) {
+		context.node = orig_context.node;
+	}
+
+	if( (!context.self) && mvc) {
+		context.self = mvc;
+	}
+
+	if( (!context.params) && query_params) {
+		context.params = query_params;
+	}
+
+	debug.assert(context).is('object');
+	debug.assert(context.self).is('object');
+	debug.assert(context.context).is('object');
+	debug.assert(context.$).is('object');
+
+	return context;
+}
 
 /** The constructor */
 function MVC (opts) {
@@ -34,6 +79,7 @@ function MVC (opts) {
 		self.dirname = PATH.dirname(opts.filename);
 	}
 
+	self.context = copy2(opts.context) || {};
 	self.model = opts.model || noop;
 	self.layout = opts.layout || default_layout;
 	self.routes = opts.routes;
@@ -84,17 +130,42 @@ MVC.render = function mvc_render(mvc, params, opts) {
 	debug.assert(opts).is('object');
 
 	var view = opts.view || mvc.index;
-
 	debug.assert(view).is('function');
 
-	return Q(mvc.model(params)).then(function set_model(m) {
-		model = m;
-		if(!is.obj(model)) {
-			model = {};
+	var context = copy_context(opts.context || {}, undefined, mvc, params);
+	debug.assert(context).is('object');
+
+	if(process.env.DEBUG_MVC) {
+		debug.log('context = ', context);
+	}
+	return Q.fcall(function() {
+		if(is.func(mvc.context)) {
+			return mvc.context.call(mvc, context);
 		}
-		return view({'$': model, 'self': mvc});
+		return mvc.context;
+	}).then(function(c) {
+		if(process.env.DEBUG_MVC) {
+			debug.log('c = ', c);
+		}
+		context = copy_context(c || {}, undefined, mvc, params);
+		if(process.env.DEBUG_MVC) {
+			debug.log('context = ', context);
+		}
+		return mvc.model.call(context, params);
+	}).then(function set_model(m) {
+		if(process.env.DEBUG_MVC) {
+			debug.log('m = ', m);
+		}
+		if(is.obj(m)) {
+			context.$ = m;
+		}
+		return view(context);
 	}).then(function get_layout(body) {
-		return mvc.layout({'$': model, 'self': mvc, 'body':body});
+		if(process.env.DEBUG_MVC) {
+			debug.log('body = ', body);
+		}
+		context.body = body;
+		return mvc.layout(context);
 	});
 };
 
@@ -113,7 +184,7 @@ MVC.toNorExpress = function to_nor_express(mvc, opts) {
 	return function handle_request(req, res) {
 		var url = require('url').parse(req.url, true);
 		var params = url.query || {};
-		return MVC.render(mvc, params);
+		return MVC.render(mvc, params, {'context': {'node':{'request':req, 'response': res}}});
 	};
 };
 }
@@ -224,21 +295,9 @@ MVC.prototype.view = function mvc_view_method(name) {
 	var view = self.views[name];
 	debug.assert(view).is('function');
 	return function mvc_view_method_2(context, params) {
-		context = context || {};
 		debug.assert(context).is('object');
 		debug.assert(params).ignore(undefined).is('object');
-		if(!is.obj(context.$)) {
-			context.$ = {};
-		}
-		if(is.obj(params)) {
-			Object.keys(params).forEach(function(key) {
-				context.$[key] = params[key];
-			});
-		}
-		if(!context.self) {
-			context.self = self;
-		}
-		//debug.log('context = ' , context);
+		context = copy_context(context, params, self);
 		return view(context);
 	};
 };
