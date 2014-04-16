@@ -138,6 +138,7 @@ MVC.render = function mvc_render(mvc, params, opts) {
 	if(process.env.DEBUG_MVC) {
 		debug.log('context = ', context);
 	}
+
 	return Q.fcall(function() {
 		if(is.func(mvc.context)) {
 			return mvc.context.call(mvc, context);
@@ -164,9 +165,14 @@ MVC.render = function mvc_render(mvc, params, opts) {
 		if(process.env.DEBUG_MVC) {
 			debug.log('body = ', body);
 		}
-		context.body = body;
+		context.content = body;
 		return mvc.layout(context);
 	});
+};
+
+/** Renders the view */
+MVC.prototype.render = function(params, opts) {
+	return MVC.render(this, params, opts);
 };
 
 /** Returns our nor-express style `function(req, res)` implementation which returns promises */
@@ -184,7 +190,20 @@ MVC.toNorExpress = function to_nor_express(mvc, opts) {
 	return function handle_request(req, res) {
 		var url = require('url').parse(req.url, true);
 		var params = url.query || {};
-		return MVC.render(mvc, params, {'context': {'node':{'request':req, 'response': res}}});
+		var context = {
+			'method': req.method,
+			'query': params,
+			'node':{
+				'request': req,
+				'response': res
+			}
+		};
+
+		if(req.body) {
+			context.body = req.body;
+		}
+
+		return MVC.render(mvc, params, {'context': context});
 	};
 };
 }
