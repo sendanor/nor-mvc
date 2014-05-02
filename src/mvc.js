@@ -8,7 +8,11 @@ var PATH = require('path');
 var FS = require('nor-fs');
 var copy2 = require('nor-data').copy2;
 var require_browserify = require('./require-browserify.js');
-var search_and_require = require('./search-and-require.js');
+
+var SEARCH = require('./search-and-require.js');
+var search_and_require = SEARCH.search_and_require;
+var search_and_collect = SEARCH.search_and_collect;
+
 var default_layout = require('./mvc.layout.ejs');
 
 /* Function that does nothing */
@@ -94,6 +98,19 @@ function MVC (opts) {
 			}
 		} else {
 			self.views = require('nor-mvc-self').views;
+		}
+	}
+
+	if(!process.browser) {
+		self._node_files = [];
+		search_and_collect(self.dirname, {
+			'extension':'.js',
+			'sub_extension': '.node',
+			'require_sub_extension': true,
+			'files': self._node_files
+		});
+		if(process.env.DEBUG_MVC) {
+			debug.info('node files (from ', self.dirname,') detected: ', self._node_files);
 		}
 	}
 
@@ -271,10 +288,21 @@ MVC.prototype.toRoutes = function to_routes() {
 	        },
 	        'accept': function accept(filename, state) {
 				//debug.log('filename = ', filename);
+
+				// Accept directories
 				if(state.directory) { return true; }
-	            if( /* (PATH.basename(filename) === 'browser.js') || */ ((filename.length >= ('.browser.js'.length +1)) && filename.substr(filename.length - '.browser.js'.length) === '.browser.js') ) {
+
+				// Do not accept files like *.browser.js
+	            if( ((filename.length >= ('.browser.js'.length +1)) && filename.substr(filename.length - '.browser.js'.length) === '.browser.js') ) {
 					return false;
 				}
+
+				// Do not accept files like *.node.js
+	            if( ((filename.length >= ('.node.js'.length +1)) && filename.substr(filename.length - '.node.js'.length) === '.node.js') ) {
+					return false;
+				}
+
+				// Accept any other file like *.js
 	            return ( (filename.length >= 4) && filename.substr(filename.length - '.js'.length) === '.js') ? true : false;
 	        },
 			'routes': routes

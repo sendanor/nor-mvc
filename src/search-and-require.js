@@ -77,7 +77,103 @@ function or(f1, f2) {
 	};
 }
 
-/** Search and require all files from path
+/** Constructor for matched files */
+function FoundFile(file) {
+	this.file = file;
+}
+
+/** Returns always `false` */
+function nul() { return false; }
+
+/** Search and collect all files from path
+ * @param opts.files {object|files} Save `FoundFile` objects into this object or array
+ * @returns {object} All matching files from path
+ */
+function search_and_collect(path, opts) {
+	if(process.env.DEBUG_MVC) {
+		debug.log('search_and_collect(', path, ',', opts, ')');
+	}
+	opts = opts || {};
+	debug.assert(path).is('string');
+	debug.assert(opts).is('object');
+
+	var primary_ext = opts.extension || '.js';
+	var sub_ext = opts.sub_extension;
+	var parent_name = opts.parent_name;
+
+	debug.assert(primary_ext).is('string');
+	debug.assert(sub_ext).ignore(undefined).is('string');
+
+	// opts.require_sub_extension
+	debug.assert(opts.require_sub_extension).ignore(undefined).is('boolean');
+	if(opts.require_sub_extension === undefined) {
+		opts.require_sub_extension = false;
+	}
+
+	// 
+	function collect_file(file) {
+		if(is.array(opts.files)) {
+			opts.files.push(file);
+		} else if(is.obj(opts.files)) {
+			opts.files[file.file] = file;
+		}
+		return file;
+	}
+
+	// 
+	if(!is_directory(path)) {
+		return collect_file(new FoundFile(path));
+	}
+
+	var result_files = [];
+	var result = opts.result || {};
+
+	debug.assert(result).is('object');
+
+	var files = FS.sync.readdir(path).map(function join_path(file) {
+		return PATH.join(path, file);
+	});
+
+	// Handle files
+	var logic = opts.require_sub_extension ? and : or;
+	files.filter(logic(has_extension(primary_ext), sub_ext ? has_sub_extension(sub_ext) : nul )).forEach(function each(file) {
+		var name = PATH.basename(file, PATH.extname(file));
+		if( sub_ext && has_extension(sub_ext)(name) ) {
+			name = PATH.basename(name, sub_ext);
+		}
+		if(parent_name) {
+			name = [parent_name, name].join('.');
+		}
+		if(result[name] !== undefined) {
+			debug.warn('Multiple files conflicted for ', name, ' -- later takes preference: ', file );
+		}
+		result[name] = collect_file(new FoundFile(file));
+	});
+
+	// Handle sub directories
+	files.filter(is_directory).forEach(function each_2(dir) {
+		var name = PATH.basename(dir);
+		if(parent_name) {
+			name = [parent_name, name].join('.');
+		}
+		if(result[name] !== undefined) {
+			debug.warn('Multiple files conflicted for ', name, ' -- directory takes preference: ', dir);
+		}
+		search_and_collect(dir, {
+			'extension': primary_ext,
+			'sub_extension': sub_ext,
+			'require_sub_extension': opts.require_sub_extension,
+			'parent_name': name,
+			'result': result,
+			'files': opts.files
+		});
+	});
+
+	return result;
+}
+
+/** Search and 
+require all files from path
  * @returns {object} All files in an object using `require()` by basenames
  */
 function search_and_require(path, opts) {
@@ -95,6 +191,13 @@ function search_and_require(path, opts) {
 	debug.assert(primary_ext).is('string');
 	debug.assert(sub_ext).ignore(undefined).is('string');
 
+	// opts.require_sub_extension
+	debug.assert(opts.require_sub_extension).ignore(undefined).is('boolean');
+	if(opts.require_sub_extension === undefined) {
+		opts.require_sub_extension = false;
+	}
+
+	// 
 	if(! is_directory(path) ) {
 		return require(path);
 	}
@@ -107,7 +210,8 @@ function search_and_require(path, opts) {
 		return PATH.join(path, file);
 	});
 
-	files.filter(or(has_extension(primary_ext), sub_ext ? has_sub_extension(sub_ext) : function nul() { return false; } )).forEach(function each(file) {
+	var logic = opts.require_sub_extension ? and : or;
+	files.filter(logic(has_extension(primary_ext), sub_ext ? has_sub_extension(sub_ext) : nul )).forEach(function each(file) {
 		var name = PATH.basename(file, PATH.extname(file));
 		if( sub_ext && has_extension(sub_ext)(name) ) {
 			name = PATH.basename(name, sub_ext);
@@ -133,6 +237,7 @@ function search_and_require(path, opts) {
 		search_and_require(dir, {
 			'extension': primary_ext,
 			'sub_extension': sub_ext,
+			'require_sub_extension': opts.require_sub_extension,
 			'parent_name': name,
 			'result': result
 		});
@@ -142,6 +247,9 @@ function search_and_require(path, opts) {
 }
 
 // Exports
-module.exports = search_and_require;
+module.exports = {
+	search_and_require: search_and_require,
+	search_and_collect: search_and_collect
+};
 
 /* EOF */

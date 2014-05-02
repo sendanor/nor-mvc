@@ -139,99 +139,119 @@ function get_object_as_temp_file(obj, basedir) {
 
 /** Build browserify bundle */
 function build_bundle(entry_file, opts) {
-	var build_completed = false;
-
 	if(!process.env.DISABLE_MVC_MESSAGES) {
 		debug.info('Building using browserify: ', entry_file);
 	}
 
-	if(process.env.DEBUG_MVC) {
-		debug.log('step 1');
-	}
+	var _cache;
+	var _b;
+	var _tmpfile;
 
-	debug.assert(entry_file).is('string');
-
-	opts = opts || {};
-	debug.assert(opts).is('object');
-
-	var cache = {
-		'modified': is.array(opts.entries) ? opts.entries.map(function() { }) : [],
-		'body': undefined
-	};
-
-	if(!opts.entries) {
-		opts.entries = [];
-	}
-
-	var b = browserify(opts);
-
-	b.add(entry_file);
-
-	b.ignore("nor-fs");
-	b.ignore("browserify");
-	b.ignore("search-and-require.js");
-	b.ignore("require-browserify.js");
-	b.ignore(__filename);
-
-	//b.transform({ global: true }, 'browserify-shim');
-	b.transform({ global: true }, 'browserify-ejs');
-	b.transform({ global: true }, 'envify');
-	
-	if(process.env.DEBUG_MVC) {
-		debug.log('step 2');
-	}
-
-	var _tmpfile = {'clean': function() {}};
 	return Q.fcall(function() {
+
+		if(process.env.DEBUG_MVC) {
+			debug.log('step 1');
+		}
+
+		debug.assert(entry_file).is('string');
+	
+		opts = opts || {};
+		debug.assert(opts).is('object');
+	
+		_cache = {
+			'modified': is.array(opts.entries) ? opts.entries.map(function() { }) : [],
+			'body': undefined
+		};
+
+		if(!opts.entries) {
+			opts.entries = [];
+		}
+
+		_b = browserify(opts);
+
+		_b.add(entry_file);
+
+		_b.ignore("nor-fs");
+		_b.ignore("browserify");
+		_b.ignore("search-and-require.js");
+		_b.ignore("require-browserify.js");
+		_b.ignore(__filename);
+
+		// Ignore node files
+		if(opts.mvc && opts.mvc._node_files) {
+			debug.assert(opts.mvc._node_files).is('array');
+			debug.log( 'node_files =', opts.mvc._node_files );
+
+			opts.mvc._node_files.forEach(function(found) {
+				_b.ignore( found.file );
+			});
+		}
+
+		//_b.transform({ global: true }, 'browserify-shim');
+		_b.transform({ global: true }, 'browserify-ejs');
+		_b.transform({ global: true }, 'envify');
+	
+		if(process.env.DEBUG_MVC) {
+			debug.log('step 2');
+		}
+
+		_tmpfile = {'clean': function() {}};
+
 		if(!opts.mvc) { return; }
+
+		// 
 		return get_object_as_temp_file(opts.mvc, opts.basedir).then(function(result) {
 			_tmpfile = result;
-			//b.add(result.file);
-			b.require(result.file, {'expose':'nor-mvc-self'});
+			//_b.add(result.file);
+			_b.require(result.file, {'expose':'nor-mvc-self'});
 		});
+
 	}).then(function() {
 		return get_times(opts.entries);
 	}).then(function(modified) {
 		if(process.env.DEBUG_MVC) {
 			debug.log('modified = ', modified);
-			debug.log('cache = ', cache);
+			debug.log('_cache = ', _cache);
 		}
 
-		var no_cached_bundle = !!(cache.body === undefined);
+		var no_cached_bundle = !!(_cache.body === undefined);
+
 		var files_changed = !!(modified.map(function(d, i) {
-			return !!( d !== cache.modified[i] );
+			return !!( d !== _cache.modified[i] );
 		}).some(function(x) {
 			return x === true;
 		}));
-		var build_bundle = !!( no_cached_bundle || files_changed );
-	
+
+		var lets_build_bundle = !!( no_cached_bundle || files_changed );
+		
 		if(process.env.DEBUG_MVC) {
 			debug.log('no_cached_bundle = ', no_cached_bundle);
 			debug.log('files_changed = ', files_changed);
-			debug.log('build_bundle = ', build_bundle);
+			debug.log('lets_build_bundle = ', lets_build_bundle);
 		}
-	
-		if(build_bundle) {
-			return do_browserify_bundle(b).then(function(body) {
-				cache.modified = modified;
-				cache.body = body;
-				return body;
-			});
+		
+		if(!lets_build_bundle) {
+			return _cache.body;
 		}
-		return cache.body;
+
+		return do_browserify_bundle(_b).then(function(body) {
+			_cache.modified = modified;
+			_cache.body = body;
+			return body;
+		});
 
 	}).then(function(body) {
-		build_completed = true;
-
 		if(!process.env.DISABLE_MVC_MESSAGES) {
 			debug.info('Browserify build successful for ', entry_file);
 		}
 
 		return body;
-	}).fin(function() {
-		if( (!build_completed) && (!process.env.DISABLE_MVC_ERRORS)) {
-			debug.error('Browserify build failed for file ', entry_file);
+	}).fail(function(err) {
+		if(!process.env.DISABLE_MVC_ERRORS) {
+			debug.error('Browserify build failed for file ', entry_file, ': ', err);
 		}
+		return Q.reject(err);
+	}).fin(function() {
 		_tmpfile.clean();
 	});
 }
