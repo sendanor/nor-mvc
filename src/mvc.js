@@ -93,9 +93,9 @@ function MVC (opts) {
 	if(!self.views) {
 		if(!process.browser) {
 			self.views = search_and_require(self.dirname, {'extension':'.ejs', 'sub_extension': '.view'});
-			if(process.env.DEBUG_MVC) {
-				debug.info('views (from ', self.dirname,') detected: ', self.views);
-			}
+			//if(process.env.DEBUG_MVC) {
+			//	debug.info('views (from ', self.dirname,') detected: ', self.views);
+			//}
 		} else {
 			self.views = require('nor-mvc-self').views;
 		}
@@ -287,7 +287,7 @@ MVC.prototype.toRoutes = function to_routes() {
 	            return false;
 	        },
 	        'accept': function accept(filename, state) {
-				//debug.log('filename = ', filename);
+				debug.log('filename = ', filename);
 
 				// Accept directories
 				if(state.directory) { return true; }
@@ -311,6 +311,11 @@ MVC.prototype.toRoutes = function to_routes() {
 		if(process.env.DEBUG_MVC) {
 			debug.log('MVC{', self.filename,'} routes = ', routes);
 		}
+
+		if( (!routes.index) && is.func(routes.GET) ) {
+			routes.index = {'GET': routes.GET};
+		}
+
 		return routes;
 	}
 
@@ -340,6 +345,9 @@ MVC.prototype.view = function mvc_view_method(name) {
 		debug.log('MVC{', self.filename,'}.view(', name,')');
 	}
 	var view = self.views[name];
+	if(!is.func(view)) {
+		throw new TypeError("No view named: " + name);
+	}
 	debug.assert(view).is('function');
 	return function mvc_view_method_2(context, params) {
 		debug.assert(context).is('object');
