@@ -234,7 +234,9 @@ function build_bundle(entry_file, opts) {
 			return _cache.body;
 		}
 
-		return do_browserify_bundle(_b).then(function(body) {
+		return do_browserify_bundle(_b, {
+			'debug': debug.isDevelopment()
+		}).then(function(body) {
 			_cache.modified = modified;
 			_cache.body = body;
 			return body;
