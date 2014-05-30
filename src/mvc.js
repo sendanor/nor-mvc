@@ -293,7 +293,9 @@ MVC.prototype.toRoutes = function to_routes() {
 	            return false;
 	        },
 	        'accept': function accept(filename, state) {
-				debug.log('filename = ', filename);
+				if(process.env.DEBUG_MVC) {
+					debug.log('filename = ', filename);
+				}
 
 				// Accept directories
 				if(state.directory) { return true; }

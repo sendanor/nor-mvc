@@ -139,7 +139,7 @@ function get_object_as_temp_file(obj, basedir) {
 
 /** Build browserify bundle */
 function build_bundle(entry_file, opts) {
-	if(!process.env.DISABLE_MVC_MESSAGES) {
+	if(process.env.DEBUG_MVC) {
 		debug.info('Building using browserify: ', entry_file);
 	}
 
@@ -180,7 +180,10 @@ function build_bundle(entry_file, opts) {
 		// Ignore node files
 		if(opts.mvc && opts.mvc._node_files) {
 			debug.assert(opts.mvc._node_files).is('array');
-			debug.log( 'node_files =', opts.mvc._node_files );
+
+			if(process.env.DEBUG_MVC) {
+				debug.log( 'node_files =', opts.mvc._node_files );
+			}
 
 			opts.mvc._node_files.forEach(function(found) {
 				_b.ignore( found.file );
@@ -250,7 +253,7 @@ function build_bundle(entry_file, opts) {
 		return body;
 	}).fail(function(err) {
 		if(!process.env.DISABLE_MVC_ERRORS) {
-			debug.error('Browserify build failed for file ', entry_file, ': ', err);
+			debug.error('Browserify build FAILED for file ', entry_file, ': ', err);
 		}
 		return Q.reject(err);
 	}).fin(function() {
