@@ -75,6 +75,7 @@ function MVC (opts) {
 	debug.assert(opts.routes).ignore(undefined).is('string');
 	debug.assert(opts.browser).ignore(undefined).is('object');
 	debug.assert(opts.setup).ignore(undefined).is('function');
+	debug.assert(opts.afterSetup).ignore(undefined).is('function');
 	debug.assert(opts.exit).ignore(undefined).is('function');
 	debug.assert(opts.filename).is('string');
 
@@ -92,6 +93,7 @@ function MVC (opts) {
 	self.routes = opts.routes;
 	self.browser = opts.browser;
 	self.setup = opts.setup;
+	self.afterSetup = opts.afterSetup;
 	self.exit = opts.exit;
 	self.index = opts.index || noop;
 	//self.view = opts.view || PATH.basename(self.filename, PATH.extname(self.filename));
