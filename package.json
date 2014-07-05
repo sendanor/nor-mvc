@@ -1,6 +1,6 @@
 {
   "name": "nor-mvc",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "Sendanor Model-View-Controller Module",
   "main": "src/mvc.js",
   "scripts": {
@@ -36,6 +36,7 @@
     "browserify-shim" : ">= 3.4.1  < 3.5.0",
     "envify"          : ">= 1.2.1  < 1.3.0",
 	"through"         : ">= 2.3.4  < 2.4.0",
-	"temp"            : ">= 0.6.0  < 0.7.0"
+	"temp"            : ">= 0.6.0  < 0.7.0",
+    "merge"           : ">= 1.1.2   < 1.2.0"
   }
 }

@@ -214,10 +214,12 @@ MVC.toNorExpress = function to_nor_express(mvc, opts) {
 
 	return function handle_request(req, res) {
 		var url = require('url').parse(req.url, true);
-		var params = url.query || {};
+		var params = req.params || {};
+		debug.assert(params).is('object');
+
 		var context = {
 			'method': req.method,
-			'query': params,
+			'query': url.query,
 			'node':{
 				'request': req,
 				'response': res
