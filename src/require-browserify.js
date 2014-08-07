@@ -1,13 +1,26 @@
 /* Model-View-Controller */
 "use strict";
 var ejs = require('ejs');
-var Q = require('q');
+var _Q = require('q');
 var copy = require('nor-data').copy;
 var debug = require('nor-debug');
 var is = require('nor-is');
 var PATH = require('path');
 var FS = require('nor-fs');
-var browserify = require('browserify')
+var browserify = require('browserify');
+
+/** Hash-map for promises of different files */
+var _build_promises = {};
+
+/** Returns a promise of when a specific file is ready */
+function get_promise_of_build_success(entryfile) {
+	debug.assert(entryfile).is('string');
+	entryfile = PATH.resolve(entryfile);
+	var p = _build_promises.hasOwnProperty(entryfile) ? _build_promises[entryfile] : undefined;
+	debug.assert(p).is('object');
+	debug.assert(p.then).is('function');
+	return p.then(function() { return true; }).fail(function() { return false; });
+}
 
 /** Simply builds a bundle and returns it */
 function do_browserify_bundle(b, opts) {
@@ -18,7 +31,7 @@ function do_browserify_bundle(b, opts) {
 	debug.assert(b).is('object');
 	debug.assert(opts).is('object');
 
-	var defer = Q.defer();
+	var defer = _Q.defer();
 	b.bundle(opts, function handle_result_from_bundle(err, src) {
 		if(err) {
 			defer.reject(err);
@@ -32,7 +45,7 @@ function do_browserify_bundle(b, opts) {
 /** Save times  */
 function get_times(files) {
 	if(!is.array(files)) {
-		return Q([]);
+		return _Q([]);
 	}
 
 	var modified = files.map(function() {});
@@ -48,7 +61,7 @@ function get_times(files) {
 				return stats;
 			});
 		};
-	}).reduce(Q.when, Q()).then(function() {
+	}).reduce(_Q.when, _Q()).then(function() {
 		return modified;
 	});
 }
@@ -60,19 +73,19 @@ function get_object_as_stream(obj) {
 		return 'module.exports=' + data + ';';
 	}
 
-	var Stream = require('stream')
-	var stream = new Stream()
+	var Stream = require('stream');
+	var stream = new Stream();
 	stream.pipe = function(dest) {
 		var data = JSON.stringify(obj);
-		dest.write(wrap(data))
-	}
+		dest.write(wrap(data));
+	};
 	return stream;
 }
 
 /**
  * Function that returns promise of a temporary directory
  */
-var mktempdir = Q.denodeify(require('temp').mkdir);
+var mktempdir = _Q.denodeify(require('temp').mkdir);
 
 /** Returns a promise of an object with a property `file` pointing to temporary file containing the object `obj` and method `.clean()` to clean it.
  * FIXME: Convert sync methods into async
@@ -139,6 +152,9 @@ function get_object_as_temp_file(obj, basedir) {
 
 /** Build browserify bundle */
 function build_bundle(entry_file, opts) {
+
+	entry_file = PATH.resolve(entry_file);
+
 	if(process.env.DEBUG_MVC) {
 		debug.info('Building using browserify: ', entry_file);
 	}
@@ -147,7 +163,7 @@ function build_bundle(entry_file, opts) {
 	var _b;
 	var _tmpfile;
 
-	return Q.fcall(function() {
+	var ret_p = _Q.fcall(function() {
 
 		if(process.env.DEBUG_MVC) {
 			debug.log('step 1');
@@ -217,10 +233,10 @@ function build_bundle(entry_file, opts) {
 			debug.log('_cache = ', _cache);
 		}
 
-		var no_cached_bundle = !!(_cache.body === undefined);
+		var no_cached_bundle = _cache.body === undefined;
 
 		var files_changed = !!(modified.map(function(d, i) {
-			return !!( d !== _cache.modified[i] );
+			return d !== _cache.modified[i];
 		}).some(function(x) {
 			return x === true;
 		}));
@@ -255,10 +271,14 @@ function build_bundle(entry_file, opts) {
 		if(!process.env.DISABLE_MVC_ERRORS) {
 			debug.error('Browserify build FAILED for file ', entry_file, ': ', err);
 		}
-		return Q.reject(err);
+		return _Q.reject(err);
 	}).fin(function() {
 		_tmpfile.clean();
 	});
+
+	_build_promises[entry_file] = ret_p;
+
+	return ret_p;
 }
 
 /** Returns a predicate function for testing path extensions */
@@ -272,5 +292,8 @@ var require_browserify = module.exports = function require_browserify(entry_file
 		});
 	};
 };
+
+// Export
+require_browserify.readiness = get_promise_of_build_success;
 
 /* EOF */

@@ -318,7 +318,7 @@ MVC.prototype.toRoutes = function to_routes() {
 	            return ( (filename.length >= 4) && filename.substr(filename.length - '.js'.length) === '.js') ? true : false;
 	        },
 			'routes': routes
-    	});
+		});
 
 		if(process.env.DEBUG_MVC) {
 			debug.log('MVC{', self.filename,'} routes = ', routes);
@@ -368,5 +368,8 @@ MVC.prototype.view = function mvc_view_method(name) {
 		return view(context);
 	};
 };
+
+/** Returns a promise of build status for browserify bundles */
+MVC.browserify_readiness = require_browserify.readiness;
 
 /* EOF */
