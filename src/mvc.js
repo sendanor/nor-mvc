@@ -88,6 +88,7 @@ function MVC (opts) {
 		self.dirname = PATH.dirname(opts.filename);
 	}
 
+	self.settings = {};
 	self.headers = is.obj(opts.headers) ? copy2(opts.headers) : undefined;
 	self.context = copy2(opts.context) || {};
 	self.model = opts.model || noop;
@@ -138,6 +139,11 @@ MVC.create = function mvc_create(opts) {
 
 /** Returns our nor-express style `function(req, res)` implementation which returns promises */
 MVC.render = function mvc_render(mvc, params, opts) {
+
+	if(opts.node && opts.node.disable_render) {
+		return;
+	}
+
 	if(process.env.DEBUG_MVC) {
 		debug.log('MVC.render(', mvc, ', ', params, ',', opts, ')');
 	}
@@ -167,20 +173,37 @@ MVC.render = function mvc_render(mvc, params, opts) {
 	}
 
 	return Q.fcall(function() {
+		if(context.node && context.node.disable_render) {
+			return;
+		}
+
 		if(is.func(mvc.context)) {
 			return mvc.context.call(mvc, context);
 		}
+
 		return mvc.context;
 	}).then(function(c) {
+		if(c.node && c.node.disable_render) {
+			return;
+		}
+
 		if(process.env.DEBUG_MVC) {
 			debug.log('c = ', c);
 		}
+
 		context = copy_context(c || {}, undefined, mvc, params);
+
 		if(process.env.DEBUG_MVC) {
 			debug.log('context = ', context);
 		}
+
 		return mvc.model.call(context, params);
 	}).then(function set_model(m) {
+
+		if(context.node && context.node.disable_render) {
+			return;
+		}
+
 		if(process.env.DEBUG_MVC) {
 			debug.log('m = ', m);
 		}
@@ -189,6 +212,10 @@ MVC.render = function mvc_render(mvc, params, opts) {
 		}
 		return view(context);
 	}).then(function get_layout(body) {
+		if(context.node && context.node.disable_render) {
+			return;
+		}
+
 		if(process.env.DEBUG_MVC) {
 			debug.log('body = ', body);
 		}
@@ -215,6 +242,8 @@ MVC.toNorExpress = function to_nor_express(mvc, opts) {
 	debug.assert(mvc.index).is('function');
 
 	return function handle_request(req, res) {
+
+		/* */
 		var url = require('url').parse(req.url, true);
 		var params = req.params || {};
 		debug.assert(params).is('object');
@@ -237,6 +266,15 @@ MVC.toNorExpress = function to_nor_express(mvc, opts) {
 		if(req.body) {
 			context.body = req.body;
 		}
+
+		/* Let's make sure that if the connection is closed the MVC will not render anything anymore. */
+		res.on('finish', function() {
+			context.node.disable_render = true;
+		});
+
+		res.on('close', function() {
+			context.node.disable_render = true;
+		});
 
 		return MVC.render(mvc, params, {'context': context});
 	};
