@@ -69,6 +69,7 @@ function MVC (opts) {
 	}
 	opts = opts || {};
 	debug.assert(opts).is('object');
+	debug.assert(opts.headers).ignore(undefined).is('object');
 	debug.assert(opts.model).ignore(undefined).is('function');
 	debug.assert(opts.layout).ignore(undefined).is('function');
 	debug.assert(opts.index).ignore(undefined).is('function');
@@ -87,6 +88,7 @@ function MVC (opts) {
 		self.dirname = PATH.dirname(opts.filename);
 	}
 
+	self.headers = is.obj(opts.headers) ? copy2(opts.headers) : undefined;
 	self.context = copy2(opts.context) || {};
 	self.model = opts.model || noop;
 	self.layout = opts.layout || default_layout;
@@ -216,6 +218,12 @@ MVC.toNorExpress = function to_nor_express(mvc, opts) {
 		var url = require('url').parse(req.url, true);
 		var params = req.params || {};
 		debug.assert(params).is('object');
+
+		if(is.obj(mvc.headers)) {
+			Object.keys(mvc.headers).forEach(function(key) {
+				res.setHeader(key, mvc.headers[key]);
+			});
+		}
 
 		var context = {
 			'method': req.method,
