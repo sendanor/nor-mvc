@@ -209,7 +209,12 @@ function build_bundle(entry_file, opts) {
 		//_b.transform({ global: true }, 'browserify-shim');
 		_b.transform({ global: true }, 'browserify-ejs');
 		_b.transform({ global: true }, 'envify');
-	
+
+		if(process.env.NODE_ENV === 'production') {
+			_b.transform({ global: true }, 'uglifyify');
+			//_b.transform('uglifyify');
+		}
+
 		if(process.env.DEBUG_MVC) {
 			debug.log('step 2');
 		}
