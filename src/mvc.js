@@ -82,6 +82,8 @@ function MVC (opts) {
 
 	var self = this;
 
+	self.timestamp = (new Date()).getTime();
+
 	self.filename = opts.filename;
 
 	if(!opts.dirname) {
@@ -322,7 +324,17 @@ MVC.prototype.toRoutes = function to_routes() {
 	    routes = require('nor-express').routes.load( PATH.resolve(self.dirname, self.routes), {
 			/** Makes it possible to handle the require of accepted files (and enable support for other types) */
 			'require': function require_wrapper(filename) {
-				if(PATH.basename(filename) !== 'browser.js') {
+
+				var dirname = PATH.dirname(filename);
+				var basename = PATH.basename(filename);
+
+				var match_browser_js = basename === 'browser.js';
+
+				var match_versioned_browser_js = (basename.length >= 'browser..js'.length) &&
+					(basename.substr(0, 'browser.'.length) === 'browser.') &&
+					(basename.substr(-3) === '.js');
+
+				if(!(match_browser_js || match_versioned_browser_js)) {
 					return require(filename);
 				}
 
@@ -332,6 +344,10 @@ MVC.prototype.toRoutes = function to_routes() {
 					mvc = self;
 				} else {
 					mvc = require(PATH.resolve(basedir, 'index.js'));
+				}
+
+				if(match_versioned_browser_js) {
+					filename = PATH.join(dirname, 'browser.js');
 				}
 
 				return require_browserify(filename, {

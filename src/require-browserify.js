@@ -247,13 +247,13 @@ function build_bundle(entry_file, opts) {
 		}));
 
 		var lets_build_bundle = !!( no_cached_bundle || files_changed );
-		
+
 		if(process.env.DEBUG_MVC) {
 			debug.log('no_cached_bundle = ', no_cached_bundle);
 			debug.log('files_changed = ', files_changed);
 			debug.log('lets_build_bundle = ', lets_build_bundle);
 		}
-		
+
 		if(!lets_build_bundle) {
 			return _cache.body;
 		}
@@ -289,12 +289,17 @@ function build_bundle(entry_file, opts) {
 /** Returns a predicate function for testing path extensions */
 var require_browserify = module.exports = function require_browserify(entry_file, opts) {
 	var bundle = build_bundle(entry_file, opts);
-	return function step_2(req, res) {
+
+	function step_2(req, res) {
 		return bundle.then(function(body) {
 			/* Please note: application/javascript would be 'right' but apparently IE6-8 do not support it. Not tested, though. Let's test it. */
 			res.header('content-type', 'application/javascript; charset=UTF-8');
 			res.send(body);
 		});
+	}
+
+	return {
+		'USE': step_2
 	};
 };
 
