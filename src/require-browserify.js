@@ -1,7 +1,8 @@
-/* Model-View-Controller */
+/* nor-mvc -- Model-View-Controller -- require-browserify.js */
 "use strict";
-var ejs = require('ejs');
+/*var ejs = */require('ejs');
 var _Q = require('q');
+var ARRAY = require('nor-array');
 var copy = require('nor-data').copy;
 var debug = require('nor-debug');
 var is = require('nor-is');
@@ -48,8 +49,8 @@ function get_times(files) {
 		return _Q([]);
 	}
 
-	var modified = files.map(function() {});
-	return files.map(function(file, i) {
+	var modified = ARRAY(files).map(function() {}).valueOf();
+	return ARRAY(files).map(function(file, i) {
 		if(!is.string(file)) {
 			return;
 		}
@@ -67,6 +68,7 @@ function get_times(files) {
 }
 
 /** Returns a stream from a object for browserify */
+/*
 function get_object_as_stream(obj) {
 	function wrap(data) {
 		debug.assert(data).is('string');
@@ -81,6 +83,7 @@ function get_object_as_stream(obj) {
 	};
 	return stream;
 }
+*/
 
 /**
  * Function that returns promise of a temporary directory
@@ -95,9 +98,11 @@ function get_object_as_temp_file(obj, basedir) {
 	debug.assert(obj).is('object');
 	debug.assert(basedir).is('string');
 
+	/*
 	function wrap_ejs(template) {
 		return '(function() {var t = ' + template + '; return function(l) { return t(l) }}())';
 	}
+	*/
 
 	function wrap(data) {
 		debug.assert(data).is('object');
@@ -116,7 +121,7 @@ function get_object_as_temp_file(obj, basedir) {
 			//'require("ejs");',
 			'var mod = module.exports = ' + JSON.stringify(mod) + ';'
 		];
-		Object.keys(data.views).forEach(function(view) {
+		ARRAY(Object.keys(data.views)).forEach(function(view) {
 			var file = data.views[view].file;
 			//code.push('mod.views[' + JSON.stringify(view) + "] = require(" + JSON.stringify( '.' + PATH.sep + PATH.relative(basedir, data.views[view].file)) + ");");
 			code.push('mod.views[' + JSON.stringify(view) + "] = require(" + JSON.stringify(file) + ");");
@@ -170,12 +175,12 @@ function build_bundle(entry_file, opts) {
 		}
 
 		debug.assert(entry_file).is('string');
-	
+
 		opts = opts || {};
 		debug.assert(opts).is('object');
-	
+
 		_cache = {
-			'modified': is.array(opts.entries) ? opts.entries.map(function() { }) : [],
+			'modified': is.array(opts.entries) ? ARRAY(opts.entries).map(function() { }).valueOf() : [],
 			'body': undefined
 		};
 
@@ -187,11 +192,15 @@ function build_bundle(entry_file, opts) {
 
 		_b.add(entry_file);
 
+		_b.ignore("ansi"); // nor-debug uses this on node side
+		_b.ignore("temp");
 		_b.ignore("nor-fs");
 		_b.ignore("nor-express");
 		_b.ignore("browserify");
 		_b.ignore("search-and-require.js");
 		_b.ignore("require-browserify.js");
+		_b.ignore("./search-and-require.js");
+		_b.ignore("./require-browserify.js");
 		_b.ignore(__filename);
 
 		// Ignore node files
@@ -202,7 +211,7 @@ function build_bundle(entry_file, opts) {
 				debug.log( 'node_files =', opts.mvc._node_files );
 			}
 
-			opts.mvc._node_files.forEach(function(found) {
+			ARRAY(opts.mvc._node_files).forEach(function(found) {
 				_b.ignore( found.file );
 			});
 		}
@@ -241,7 +250,7 @@ function build_bundle(entry_file, opts) {
 
 		var no_cached_bundle = _cache.body === undefined;
 
-		var files_changed = !!(modified.map(function(d, i) {
+		var files_changed = !!(ARRAY(modified).map(function(d, i) {
 			return d !== _cache.modified[i];
 		}).some(function(x) {
 			return x === true;

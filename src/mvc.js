@@ -1,11 +1,12 @@
-/* Model-View-Controller */
+/* nor-mvc -- Model-View-Controller -- mvc.js */
 "use strict";
 require('ejs');
 var Q = require('q');
 var debug = require('nor-debug');
 var is = require('nor-is');
+var ARRAY = require('nor-array');
 var PATH = require('path');
-var FS = require('nor-fs');
+//var FS = require('nor-fs');
 var copy2 = require('nor-data').copy2;
 var require_browserify = require('./require-browserify.js');
 
@@ -24,7 +25,7 @@ function copy_context(orig_context, params, mvc, query_params) {
 	debug.assert(params).ignore(undefined).is('object');
 
 	var context = {};
-	Object.keys(orig_context).filter(function(key) {
+	ARRAY(Object.keys(orig_context)).filter(function(key) {
 		return !!( (key !== 'context') && (key !== 'node') && (key !== 'self') );
 	}).forEach(function(key) {
 		context[key] = copy2(orig_context[key]);
@@ -37,7 +38,7 @@ function copy_context(orig_context, params, mvc, query_params) {
 	}
 
 	if(is.obj(params)) {
-		Object.keys(params).forEach(function(key) {
+		ARRAY(Object.keys(params)).forEach(function(key) {
 			context.$[key] = copy2(params[key]);
 		});
 	}
@@ -156,7 +157,8 @@ MVC.render = function mvc_render(mvc, params, opts) {
 	debug.assert(mvc.index).is('function');
 	debug.assert(mvc.dirname).is('string');
 
-	var model;
+	//var model;
+
 	params = params || {};
 
 	debug.assert(params).is('object');
@@ -251,7 +253,7 @@ MVC.toNorExpress = function to_nor_express(mvc, opts) {
 		debug.assert(params).is('object');
 
 		if(is.obj(mvc.headers)) {
-			Object.keys(mvc.headers).forEach(function(key) {
+			ARRAY(Object.keys(mvc.headers)).forEach(function(key) {
 				res.setHeader(key, mvc.headers[key]);
 			});
 		}
@@ -355,7 +357,7 @@ MVC.prototype.toRoutes = function to_routes() {
 					'basedir': basedir
 				});
 			},
-	        'ignore': function ignore(filename) {
+	        'ignore': function ignore(/* filename */) {
 	            return false;
 	        },
 	        'accept': function accept(filename, state) {

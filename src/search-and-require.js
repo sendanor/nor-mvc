@@ -1,15 +1,16 @@
-/* Model-View-Controller */
+/* nor-mvc -- Model-View-Controller -- search-and-require.js */
 "use strict";
 require('ejs');
-var Q = require('q');
+//var Q = require('q');
 var util = require('util');
 var debug = require('nor-debug');
 var is = require('nor-is');
 var PATH = require('path');
 var FS = require('nor-fs');
-var require_browserify; 
-var require_browserify = require('./require-browserify.js');
-var default_layout = require('./mvc.layout.ejs');
+//var require_browserify; 
+//var require_browserify = require('./require-browserify.js');
+
+//var default_layout = require('./mvc.layout.ejs');
 
 /** Returns a predicate function for testing path extensions */
 function has_extension(e) {
@@ -44,6 +45,7 @@ function is_directory(p) {
 }
 
 /** Returns a predicate `function(path)` that will return `true` if result of `f(p)` was `false`, otherwise returns `false`. */
+/*
 function is_not(f) {
 	//if(process.env.DEBUG_MVC) {
 	//	debug.log('is_not(', f, ')');
@@ -53,6 +55,7 @@ function is_not(f) {
 		return f(p) ? false : true;
 	};
 }
+*/
 
 /** Returns a predicate `function(path)` that will return `true` if result of `f1(p)` and `f2(p)` was `true`, otherwise returns `false`. */
 function and(f1, f2) {
@@ -126,7 +129,8 @@ function search_and_collect(path, opts) {
 		return collect_file(new FoundFile(path));
 	}
 
-	var result_files = [];
+	//var result_files = [];
+
 	var result = opts.result || {};
 
 	debug.assert(result).is('object');
