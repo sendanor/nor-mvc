@@ -188,6 +188,7 @@ function build_bundle(entry_file, opts) {
 		_b.add(entry_file);
 
 		_b.ignore("nor-fs");
+		_b.ignore("nor-express");
 		_b.ignore("browserify");
 		_b.ignore("search-and-require.js");
 		_b.ignore("require-browserify.js");
