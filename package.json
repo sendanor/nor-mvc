@@ -1,6 +1,6 @@
 {
   "name": "nor-mvc",
-  "version": "0.1.29",
+  "version": "0.1.30",
   "description": "Sendanor Model-View-Controller Module",
   "main": "src/mvc.js",
   "scripts": {
@@ -40,7 +40,8 @@
     "browserify-shim" : ">= 3.6.0  < 3.7.0",
     "ejsify"          : ">= 0.1.0  < 0.2.0",
     "envify"          : ">= 2.0.1  < 2.1.0",
-    "uglifyify"       : ">= 2.5.0  < 2.6.0"
+    "uglifyify"       : ">= 2.5.0  < 2.6.0",
+    "disc"            : "1.2.0"
   },
   "devDepencencies": {
     "lint"         : "*",

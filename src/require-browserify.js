@@ -1,5 +1,11 @@
 /* nor-mvc -- Model-View-Controller -- require-browserify.js */
 "use strict";
+
+// Make sure there is environment and this file is not included to browserify
+if(process.browser) {
+	throw new TypeError("This file (nor-mvc:require-browserify.js) should not be in the bundle.");
+}
+
 /*var ejs = */require('ejs');
 var _Q = require('q');
 var ARRAY = require('nor-array');
@@ -9,6 +15,104 @@ var is = require('nor-is');
 var PATH = require('path');
 var FS = require('nor-fs');
 var browserify = require('browserify');
+
+/** Environment options */
+var env_opts = {};
+ARRAY((process.env.NOR_MVC_OPTS||'').split(/ +/)).forEach(function(key) {
+
+	var defvalue = true;
+
+	if(key[0] === '+') {
+		key = key.substr(1);
+	}
+
+	if(key[0] === '-') {
+		key = key.substr(1);
+		defvalue = false;
+	}
+
+	key = key.replace(/[^a-zA-Z0-9]+/, "_").toLowerCase();
+
+	if(key[0] === '+') {
+		key = key.substr(1);
+	}
+
+	if(key[0] === '-') {
+		key = key.substr(1);
+		defvalue = false;
+	}
+
+	env_opts[key] = defvalue;
+});
+
+debug.log('env_opts = ', env_opts);
+
+/* */
+var node_env_production = process.env.NODE_ENV === 'production';
+//var node_env_development = process.env.NODE_ENV === 'development';
+
+/** Is this production build? */
+var is_production_build = node_env_production;
+if(env_opts.production === true) {
+	is_production_build = true;
+} else if(env_opts.production === false) {
+	is_production_build = false;
+}
+
+/** Is this development build? */
+var is_development_build = !is_production_build;
+if(env_opts.development === true) {
+	is_development_build = true;
+	is_production_build = false;
+} else if(env_opts.development === false) {
+	is_development_build = false;
+	is_production_build = true;
+}
+
+
+if(is_production_build) {
+	debug.log('Production build mode enabled');
+} else {
+	debug.log('Development build mode enabled');
+}
+
+/** Should we enable source maps? */
+var enable_source_maps = is_development_build;
+if(env_opts.source_maps === true) {
+	enable_source_maps = true;
+} else if(env_opts.source_maps === false) {
+	enable_source_maps = false;
+}
+
+if(enable_source_maps) {
+	debug.log('Source maps enabled');
+}
+
+/** Should we use uglifyify to minimize the bundle? */
+var minimize_bundle = is_production_build;
+if(env_opts['minimize'] === true) {
+	minimize_bundle = true;
+} else if(env_opts['minimize'] === false) {
+	minimize_bundle = false;
+}
+
+if(minimize_bundle) {
+	debug.log('Minimize enabled');
+}
+
+/** Enable support for disc? https://www.npmjs.org/package/disc */
+var use_disc = is_development_build;
+if(env_opts['use_disc'] === true) {
+	use_disc = true;
+} else if(env_opts['use_disc'] === false) {
+	use_disc = false;
+}
+
+var DISC = {};
+if(use_disc) {
+	debug.log('DISC enabled');
+	DISC = require('disc');
+}
 
 /** Hash-map for promises of different files */
 var _build_promises = {};
@@ -25,12 +129,22 @@ function get_promise_of_build_success(entryfile) {
 
 /** Simply builds a bundle and returns it */
 function do_browserify_bundle(b, opts) {
-	if(process.env.DEBUG_MVC) {
-		debug.log('step 3');
-	}
+
 	opts = opts || {};
 	debug.assert(b).is('object');
 	debug.assert(opts).is('object');
+
+	if(process.env.DEBUG_MVC) {
+		debug.log('step 3');
+	}
+
+	//if(arguments.length >= 2) {
+	//	debug.warn('Browserify no longer accepts options in b.bundle()');
+	//}
+
+	//opts = opts || {};
+	//debug.assert(b).is('object');
+	//debug.assert(opts).is('object');
 
 	var defer = _Q.defer();
 	b.bundle(opts, function handle_result_from_bundle(err, src) {
@@ -43,7 +157,7 @@ function do_browserify_bundle(b, opts) {
 	return defer.promise;
 }
 
-/** Save times  */
+/** Save times */
 function get_times(files) {
 	if(!is.array(files)) {
 		return _Q([]);
@@ -67,24 +181,6 @@ function get_times(files) {
 	});
 }
 
-/** Returns a stream from a object for browserify */
-/*
-function get_object_as_stream(obj) {
-	function wrap(data) {
-		debug.assert(data).is('string');
-		return 'module.exports=' + data + ';';
-	}
-
-	var Stream = require('stream');
-	var stream = new Stream();
-	stream.pipe = function(dest) {
-		var data = JSON.stringify(obj);
-		dest.write(wrap(data));
-	};
-	return stream;
-}
-*/
-
 /**
  * Function that returns promise of a temporary directory
  */
@@ -93,10 +189,9 @@ var mktempdir = _Q.denodeify(require('temp').mkdir);
 /** Returns a promise of an object with a property `file` pointing to temporary file containing the object `obj` and method `.clean()` to clean it.
  * FIXME: Convert sync methods into async
  */
-function get_object_as_temp_file(obj, basedir) {
+function get_object_as_temp_file(obj) {
 
 	debug.assert(obj).is('object');
-	debug.assert(basedir).is('string');
 
 	/*
 	function wrap_ejs(template) {
@@ -123,13 +218,7 @@ function get_object_as_temp_file(obj, basedir) {
 		];
 		ARRAY(Object.keys(data.views)).forEach(function(view) {
 			var file = data.views[view].file;
-			//code.push('mod.views[' + JSON.stringify(view) + "] = require(" + JSON.stringify( '.' + PATH.sep + PATH.relative(basedir, data.views[view].file)) + ");");
 			code.push('mod.views[' + JSON.stringify(view) + "] = require(" + JSON.stringify(file) + ");");
-/*			code.push('mod.views[' + JSON.stringify(view) + "] = " + wrap_ejs(ejs.compile(FS.sync.readFile(file, {'encoding':'utf8'}), {
-				client: true,
-				compileDebug: false,
-				filename: file})) + ";");
-*/
 		});
 		return code.join('\n');
 	}
@@ -140,7 +229,11 @@ function get_object_as_temp_file(obj, basedir) {
 		}
 	};
 
-	return mktempdir('nor-mvc-build').then(function(dir) {
+	//return mktempdir({
+	//	'dir': obj.tmpdir,
+	//	'prefix': 'nor-mvc-build-'
+	//}).then(function(dir) {
+	return mktempdir('nor-mvc-build-').then(function(dir) {
 		debug.assert(dir).is('string');
 		result.dir = dir;
 		var data = wrap(obj);
@@ -188,19 +281,49 @@ function build_bundle(entry_file, opts) {
 			opts.entries = [];
 		}
 
+		if(enable_source_maps) {
+			opts.debug = true;
+		}
+
+		if(use_disc) {
+			opts.fullPaths = true;
+		}
+
+		//if(!opts.builtins) {
+		//	opts.builtins = require('../node_modules/browserify/lib/builtins.js');
+		//}
+
+		//opts.noparse = [
+		//	PATH.resolve(__dirname, "./search-and-require.js"),
+		//	PATH.resolve(__dirname, "./require-browserify.js")
+		//];
+
 		_b = browserify(opts);
 
 		_b.add(entry_file);
 
+		_b.ignore("disc");
 		_b.ignore("ansi"); // nor-debug uses this on node side
 		_b.ignore("temp");
 		_b.ignore("nor-fs");
 		_b.ignore("nor-express");
 		_b.ignore("browserify");
+
 		_b.ignore("search-and-require.js");
 		_b.ignore("require-browserify.js");
+
 		_b.ignore("./search-and-require.js");
 		_b.ignore("./require-browserify.js");
+
+		_b.ignore( PATH.join(__dirname, "search-and-require.js") );
+		_b.ignore( PATH.join(__dirname, "require-browserify.js") );
+
+		_b.ignore( PATH.resolve(__dirname, "./search-and-require.js") );
+		_b.ignore( PATH.resolve(__dirname, "./require-browserify.js") );
+
+		_b.ignore( require.resolve("./search-and-require.js") );
+		_b.ignore( require.resolve("./require-browserify.js") );
+
 		_b.ignore(__filename);
 
 		// Ignore node files
@@ -219,10 +342,10 @@ function build_bundle(entry_file, opts) {
 		//_b.transform({ global: true }, 'browserify-shim');
 		_b.transform({ global: true }, 'browserify-ejs');
 		_b.transform({ global: true }, 'envify');
+		//_b.transform({ global: true }, 'ejsify');
 
-		if(process.env.NODE_ENV === 'production') {
+		if(minimize_bundle) {
 			_b.transform({ global: true }, 'uglifyify');
-			//_b.transform('uglifyify');
 		}
 
 		if(process.env.DEBUG_MVC) {
@@ -234,7 +357,7 @@ function build_bundle(entry_file, opts) {
 		if(!opts.mvc) { return; }
 
 		// 
-		return get_object_as_temp_file(opts.mvc, opts.basedir).then(function(result) {
+		return get_object_as_temp_file(opts.mvc).then(function(result) {
 			_tmpfile = result;
 			//_b.add(result.file);
 			_b.require(result.file, {'expose':'nor-mvc-self'});
@@ -269,7 +392,8 @@ function build_bundle(entry_file, opts) {
 		}
 
 		return do_browserify_bundle(_b, {
-			'debug': debug.isDevelopment()
+			'debug': enable_source_maps,
+			'fullPaths': use_disc
 		}).then(function(body) {
 			_cache.modified = modified;
 			_cache.body = body;
@@ -296,13 +420,66 @@ function build_bundle(entry_file, opts) {
 	return ret_p;
 }
 
+/** Build visualisation of bundle using disc */
+function build_disc(bundles) {
+
+	if(process.env.DEBUG_MVC) {
+		debug.info('Building HTML visualization for the bundle using disc...');
+	}
+
+	var defer = _Q.defer();
+	function cb(err, html) {
+		if(err) {
+			defer.reject(err);
+			return;
+		}
+		defer.resolve(html);
+	}
+	DISC.bundle(bundles, cb);
+
+	return defer.promise.then(function(html) {
+		if(!process.env.DISABLE_MVC_MESSAGES) {
+			debug.info('HTML visualization for bundle (using disc) successful!');
+		}
+		return html;
+	}).fail(function(err) {
+		if(!process.env.DISABLE_MVC_ERRORS) {
+			debug.error('HTML visualization for bundle (using disc) FAILED: ', err);
+		}
+		return _Q.reject(err);
+	});
+}
+
 /** Returns a predicate function for testing path extensions */
 var require_browserify = module.exports = function require_browserify(entry_file, opts) {
 	var bundle = build_bundle(entry_file, opts);
 
+	var disc_promise;
+	if(use_disc) {
+		disc_promise = bundle.then(function(body) {
+			//console.log(body);
+			return build_disc([body]);
+		});
+	}
+
 	function step_2(req, res) {
+
+		var url, extname;
+
+		if(use_disc) {
+			url = require('url').parse(req.url);
+			extname = PATH.extname(url.path);
+
+			if(extname === '.html') {
+				return disc_promise.then(function(html) {
+					res.header('content-type', 'text/html; charset=UTF-8');
+					res.send(html);
+				});
+			}
+		}
+
 		return bundle.then(function(body) {
-			/* Please note: application/javascript would be 'right' but apparently IE6-8 do not support it. Not tested, though. Let's test it. */
+			/* FIXME: Please note: application/javascript would be 'right' but apparently IE6-8 do not support it. Not tested, though. */
 			res.header('content-type', 'application/javascript; charset=UTF-8');
 			res.send(body);
 		});

@@ -91,6 +91,10 @@ function MVC (opts) {
 		self.dirname = PATH.dirname(opts.filename);
 	}
 
+	if(!self.tmpdir) {
+		self.tmpdir = PATH.join(process.cwd(), 'tmp');
+	}
+
 	self.settings = {};
 	self.headers = is.obj(opts.headers) ? copy2(opts.headers) : undefined;
 	self.context = copy2(opts.context) || {};
@@ -107,9 +111,6 @@ function MVC (opts) {
 	if(!self.views) {
 		if(!process.browser) {
 			self.views = search_and_require(self.dirname, {'extension':'.ejs', 'sub_extension': '.view'});
-			//if(process.env.DEBUG_MVC) {
-			//	debug.info('views (from ', self.dirname,') detected: ', self.views);
-			//}
 		} else {
 			self.views = require('nor-mvc-self').views;
 		}
@@ -323,7 +324,7 @@ MVC.prototype.toRoutes = function to_routes() {
 			debug.log('MVC{', self.filename,'} loading routes from ', self.dirname);
 		}
 
-	    routes = require('nor-express').routes.load( PATH.resolve(self.dirname, self.routes), {
+		routes = require('nor-express').routes.load( PATH.resolve(self.dirname, self.routes), {
 			/** Makes it possible to handle the require of accepted files (and enable support for other types) */
 			'require': function require_wrapper(filename) {
 
@@ -351,6 +352,9 @@ MVC.prototype.toRoutes = function to_routes() {
 				if(match_versioned_browser_js) {
 					filename = PATH.join(dirname, 'browser.js');
 				}
+
+				debug.log("dirname = ", dirname);
+				debug.log("basedir = ", basedir);
 
 				return require_browserify(filename, {
 					'mvc': mvc,

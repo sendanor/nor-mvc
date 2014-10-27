@@ -1,5 +1,10 @@
 /* nor-mvc -- Model-View-Controller -- search-and-require.js */
 "use strict";
+
+if(process.browser) {
+	throw new TypeError("This file (nor-mvc:search-and-require.js) should not be in the bundle.");
+}
+
 require('ejs');
 //var Q = require('q');
 var util = require('util');
