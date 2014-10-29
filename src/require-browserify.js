@@ -45,7 +45,7 @@ ARRAY((process.env.NOR_MVC_OPTS||'').split(/ +/)).forEach(function(key) {
 	env_opts[key] = defvalue;
 });
 
-debug.log('env_opts = ', env_opts);
+//debug.log('env_opts = ', env_opts);
 
 /* */
 var node_env_production = process.env.NODE_ENV === 'production';
@@ -71,9 +71,9 @@ if(env_opts.development === true) {
 
 
 if(is_production_build) {
-	debug.log('Production build mode enabled');
+	debug.info('Production build mode enabled');
 } else {
-	debug.log('Development build mode enabled');
+	debug.info('Development build mode enabled');
 }
 
 /** Should we enable source maps? */
@@ -85,7 +85,7 @@ if(env_opts.source_maps === true) {
 }
 
 if(enable_source_maps) {
-	debug.log('Source maps enabled');
+	debug.info('Source maps enabled');
 }
 
 /** Should we use uglifyify to minimize the bundle? */
@@ -97,7 +97,7 @@ if(env_opts['minimize'] === true) {
 }
 
 if(minimize_bundle) {
-	debug.log('Minimize enabled');
+	debug.info('Minimize enabled');
 }
 
 /** Enable support for disc? https://www.npmjs.org/package/disc */
@@ -110,7 +110,7 @@ if(env_opts['use_disc'] === true) {
 
 var DISC = {};
 if(use_disc) {
-	debug.log('DISC enabled');
+	debug.info('DISC enabled');
 	DISC = require('disc');
 }
 

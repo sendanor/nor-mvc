@@ -27,20 +27,15 @@
   "homepage": "https://github.com/sendanor/nor-mvc",
   "dependencies": {
     "nor-array"       : ">= 0.1.5  < 0.2.0",
-    "nor-debug"       : ">= 0.1.44 < 0.2.0",
+    "nor-debug"       : ">= 0.1.45 < 0.2.0",
     "nor-is"          : ">= 0.1.15 < 0.2.0",
-    "nor-data"        : ">= 0.0.13  < 0.1.0",
+    "nor-data"        : ">= 0.0.14  < 0.1.0",
     "nor-fs"          : ">= 0.1.11  < 0.2.0",
     "nor-express"     : ">= 0.1.48 < 0.2.0",
     "q"               : ">= 1.0.1  < 1.1.0",
     "temp"            : ">= 0.6.0  < 0.7.0",
     "ejs"             : ">= 0.8.8  < 0.9.0",
     "browserify"      : ">= 4.2.3  < 4.3.0",
-    "browserify-ejs"  : ">= 0.0.2  < 0.1.0",
-    "browserify-shim" : ">= 3.6.0  < 3.7.0",
-    "ejsify"          : ">= 0.1.0  < 0.2.0",
-    "envify"          : ">= 2.0.1  < 2.1.0",
-    "uglifyify"       : ">= 2.5.0  < 2.6.0",
     "disc"            : "1.2.0"
   },
   "devDepencencies": {
@@ -51,8 +46,8 @@
     "ejs"             : ">= 0.8.8  < 0.9.0",
     "browserify"      : ">= 4.2.3  < 4.3.0",
     "browserify-ejs"  : ">= 0.0.2  < 0.1.0",
-    "browserify-shim" : ">= 3.6.0  < 3.7.0",
-    "ejsify"          : ">= 0.1.0  < 0.2.0",
+    "browserify-shim" : ">= 3.8.0  < 3.9.0",
+    "ejsify"          : ">= 1.0.0  < 1.1.0",
     "envify"          : ">= 2.0.1  < 2.1.0",
     "uglifyify"       : ">= 2.5.0  < 2.6.0"
   }

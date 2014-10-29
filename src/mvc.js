@@ -353,8 +353,8 @@ MVC.prototype.toRoutes = function to_routes() {
 					filename = PATH.join(dirname, 'browser.js');
 				}
 
-				debug.log("dirname = ", dirname);
-				debug.log("basedir = ", basedir);
+				//debug.log("dirname = ", dirname);
+				//debug.log("basedir = ", basedir);
 
 				return require_browserify(filename, {
 					'mvc': mvc,
