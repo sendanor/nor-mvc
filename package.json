@@ -1,6 +1,6 @@
 {
   "name": "nor-mvc",
-  "version": "0.1.30",
+  "version": "0.1.31",
   "description": "Sendanor Model-View-Controller Module",
   "main": "src/mvc.js",
   "scripts": {

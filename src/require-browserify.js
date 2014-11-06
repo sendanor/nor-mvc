@@ -342,6 +342,7 @@ function build_bundle(entry_file, opts) {
 		//_b.transform({ global: true }, 'browserify-shim');
 		_b.transform({ global: true }, 'browserify-ejs');
 		_b.transform({ global: true }, 'envify');
+		//_b.transform({ global: true }, 'brfs');
 		//_b.transform({ global: true }, 'ejsify');
 
 		if(minimize_bundle) {
