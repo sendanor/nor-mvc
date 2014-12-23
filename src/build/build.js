@@ -59,16 +59,16 @@ function get_shasum(data) {
 /** Clear result files and directory */
 function clean_result(result) {
 	return _Q.fcall(function() {
-		if(result.dir) {
-			return FS.rmdirIfExists(result.dir);
-		}
-	}).then(function() {
 		if(result.files && result.files.bundle) {
 			return FS.unlinkIfExists(result.files.bundle);
 		}
 	}).then(function() {
 		if(result.files && result.files.disc) {
 			return FS.unlinkIfExists(result.files.disc);
+		}
+	}).then(function() {
+		if(result.dir) {
+			return FS.rmdirIfExists(result.dir);
 		}
 	});
 }
@@ -104,7 +104,7 @@ function save_build(build) {
 }
 
 /** Returns a predicate function for testing path extensions */
-module.exports = function build(entry_file, opts) {
+var BUILD = module.exports = function build(entry_file, opts) {
 	var promises = [];
 	var bundle = build_bundle(entry_file, opts);
 	promises.push( bundle );
@@ -138,5 +138,7 @@ module.exports = function build(entry_file, opts) {
 		return save_build(build_);
 	});
 };
+
+BUILD.clean = clean_result;
 
 /* EOF */

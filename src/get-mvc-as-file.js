@@ -22,12 +22,12 @@ var mktempdir = _Q.denodeify(require('temp').mkdir);
 /** Clean results */
 function clean_result(result) {
 	return _Q.fcall(function() {
-		if(result && result.dir) {
-			return FS.rmdirIfExists(result.dir);
-		}
-	}).then(function() {
 		if(result && result.file) {
 			return FS.unlinkIfExists(result.file);
+		}
+	}).then(function() {
+		if(result && result.dir) {
+			return FS.rmdirIfExists(result.dir);
 		}
 	});
 }

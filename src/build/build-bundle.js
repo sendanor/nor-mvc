@@ -232,8 +232,8 @@ module.exports = function build_bundle(entry_file, opts) {
 			debug.error('Browserify build FAILED for file ', entry_file, ': ', err);
 		}
 		return _Q.reject(err);
-	//}).fin(function() {
-	//	return get_mvc_as_file.clean(_tmpfile);
+	}).fin(function() {
+		return get_mvc_as_file.clean(_tmpfile);
 	});
 
 	BUILD_PROMISES.set(entry_file, ret_p);

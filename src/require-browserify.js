@@ -17,6 +17,7 @@ var child_process = require('child_process');
 var child_builder = child_process.fork(PATH.join(__dirname, 'build/child-build.js'));
 var UUID = require('node-uuid');
 var get_mvc_as_file = require('./get-mvc-as-file.js');
+var BUILD = require('./build/build.js');
 
 /** Build browserify bundle in child process */
 function child_build(entry_file, opts_) {
@@ -71,6 +72,9 @@ function child_build(entry_file, opts_) {
 				if(disc_) {
 					build.disc = disc_;
 				}
+
+				return BUILD.clean(build);
+			}).then(function() {
 				return build;
 			});
 		});

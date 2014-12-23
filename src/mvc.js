@@ -297,8 +297,11 @@ MVC.prototype.toNorExpress = function to_nor_express_method(opts) {
 };
 }
 
+var nor_express;
+
 /** Returns our nor-express style route object */
 if(!process.browser) {
+nor_express = require('nor-express');
 MVC.prototype.toRoutes = function to_routes() {
 	var self = this;
 	if(process.env.DEBUG_MVC) {
@@ -324,7 +327,7 @@ MVC.prototype.toRoutes = function to_routes() {
 			debug.log('MVC{', self.filename,'} loading routes from ', self.dirname);
 		}
 
-		routes = require('nor-express').routes.load( PATH.resolve(self.dirname, self.routes), {
+		routes = nor_express.routes.load( PATH.resolve(self.dirname, self.routes), {
 			/** Makes it possible to handle the require of accepted files (and enable support for other types) */
 			'require': function require_wrapper(filename) {
 
@@ -361,10 +364,10 @@ MVC.prototype.toRoutes = function to_routes() {
 					'basedir': basedir
 				});
 			},
-	        'ignore': function ignore(/* filename */) {
-	            return false;
-	        },
-	        'accept': function accept(filename, state) {
+			'ignore': function ignore(/* filename */) {
+				return false;
+			},
+			'accept': function accept(filename, state) {
 				if(process.env.DEBUG_MVC) {
 					debug.log('filename = ', filename);
 				}
@@ -373,18 +376,18 @@ MVC.prototype.toRoutes = function to_routes() {
 				if(state.directory) { return true; }
 
 				// Do not accept files like *.browser.js
-	            if( ((filename.length >= ('.browser.js'.length +1)) && filename.substr(filename.length - '.browser.js'.length) === '.browser.js') ) {
+				if( ((filename.length >= ('.browser.js'.length +1)) && filename.substr(filename.length - '.browser.js'.length) === '.browser.js') ) {
 					return false;
 				}
 
 				// Do not accept files like *.node.js
-	            if( ((filename.length >= ('.node.js'.length +1)) && filename.substr(filename.length - '.node.js'.length) === '.node.js') ) {
+				if( ((filename.length >= ('.node.js'.length +1)) && filename.substr(filename.length - '.node.js'.length) === '.node.js') ) {
 					return false;
 				}
 
 				// Accept any other file like *.js
-	            return ( (filename.length >= 4) && filename.substr(filename.length - '.js'.length) === '.js') ? true : false;
-	        },
+				return ( (filename.length >= 4) && filename.substr(filename.length - '.js'.length) === '.js') ? true : false;
+			},
 			'routes': routes
 		});
 
@@ -414,7 +417,7 @@ MVC.prototype.toRoutes = function to_routes() {
 		return self.routes;
 	}
 
-	throw new TypeError("Unsupported type for self.routes: " +  (typeof self.routes));
+	throw new TypeError("Unsupported type for self.routes: " + (typeof self.routes));
 };
 }
 
