@@ -8,490 +8,127 @@ if(process.browser) {
 
 /*var ejs = */require('ejs');
 var _Q = require('q');
-var ARRAY = require('nor-array');
-var copy = require('nor-data').copy;
 var debug = require('nor-debug');
-var is = require('nor-is');
+var copy = require('nor-data').copy;
 var PATH = require('path');
 var FS = require('nor-fs');
-var browserify = require('browserify');
+var URL = require('url');
+var child_process = require('child_process');
+var child_builder = child_process.fork(PATH.join(__dirname, 'build/child-build.js'));
+var UUID = require('node-uuid');
+var get_mvc_as_file = require('./get-mvc-as-file.js');
 
-/** Environment options */
-var env_opts = {};
-ARRAY((process.env.NOR_MVC_OPTS||'').split(/ +/)).forEach(function(key) {
-
-	var defvalue = true;
-
-	if(key[0] === '+') {
-		key = key.substr(1);
+/** Build browserify bundle in child process */
+function child_build(entry_file, opts_) {
+	var opts = copy(opts_);
+	if(opts_.mvc._node_files) {
+		opts.mvc_node_files = opts_.mvc._node_files;
 	}
+	return get_mvc_as_file(opts_.mvc).then(function(result) {
+		opts.mvc = result;
 
-	if(key[0] === '-') {
-		key = key.substr(1);
-		defvalue = false;
-	}
+		var defer = _Q.defer();
+		var job_id = UUID.v4();
 
-	key = key.replace(/[^a-zA-Z0-9]+/, "_").toLowerCase();
+		function message_listener(m) {
 
-	if(key[0] === '+') {
-		key = key.substr(1);
-	}
-
-	if(key[0] === '-') {
-		key = key.substr(1);
-		defvalue = false;
-	}
-
-	env_opts[key] = defvalue;
-});
-
-//debug.log('env_opts = ', env_opts);
-
-/* */
-var node_env_production = process.env.NODE_ENV === 'production';
-//var node_env_development = process.env.NODE_ENV === 'development';
-
-/** Is this production build? */
-var is_production_build = node_env_production;
-if(env_opts.production === true) {
-	is_production_build = true;
-} else if(env_opts.production === false) {
-	is_production_build = false;
-}
-
-/** Is this development build? */
-var is_development_build = !is_production_build;
-if(env_opts.development === true) {
-	is_development_build = true;
-	is_production_build = false;
-} else if(env_opts.development === false) {
-	is_development_build = false;
-	is_production_build = true;
-}
-
-
-if(is_production_build) {
-	debug.info('Production build mode enabled');
-} else {
-	debug.info('Development build mode enabled');
-}
-
-/** Should we enable source maps? */
-var enable_source_maps = is_development_build;
-if(env_opts.source_maps === true) {
-	enable_source_maps = true;
-} else if(env_opts.source_maps === false) {
-	enable_source_maps = false;
-}
-
-if(enable_source_maps) {
-	debug.info('Source maps enabled');
-}
-
-/** Should we use uglifyify to minimize the bundle? */
-var minimize_bundle = is_production_build;
-if(env_opts['minimize'] === true) {
-	minimize_bundle = true;
-} else if(env_opts['minimize'] === false) {
-	minimize_bundle = false;
-}
-
-if(minimize_bundle) {
-	debug.info('Minimize enabled');
-}
-
-/** Enable support for disc? https://www.npmjs.org/package/disc */
-var use_disc = is_development_build;
-if(env_opts['use_disc'] === true) {
-	use_disc = true;
-} else if(env_opts['use_disc'] === false) {
-	use_disc = false;
-}
-
-var DISC = {};
-if(use_disc) {
-	debug.info('DISC enabled');
-	DISC = require('disc');
-}
-
-/** Hash-map for promises of different files */
-var _build_promises = {};
-
-/** Returns a promise of when a specific file is ready */
-function get_promise_of_build_success(entryfile) {
-	debug.assert(entryfile).is('string');
-	entryfile = PATH.resolve(entryfile);
-	var p = _build_promises.hasOwnProperty(entryfile) ? _build_promises[entryfile] : undefined;
-	debug.assert(p).is('object');
-	debug.assert(p.then).is('function');
-	return p.then(function() { return true; }).fail(function() { return false; });
-}
-
-/** Simply builds a bundle and returns it */
-function do_browserify_bundle(b, opts) {
-
-	opts = opts || {};
-	debug.assert(b).is('object');
-	debug.assert(opts).is('object');
-
-	if(process.env.DEBUG_MVC) {
-		debug.log('step 3');
-	}
-
-	//if(arguments.length >= 2) {
-	//	debug.warn('Browserify no longer accepts options in b.bundle()');
-	//}
-
-	//opts = opts || {};
-	//debug.assert(b).is('object');
-	//debug.assert(opts).is('object');
-
-	var defer = _Q.defer();
-	b.bundle(opts, function handle_result_from_bundle(err, src) {
-		if(err) {
-			defer.reject(err);
-		} else {
-			defer.resolve(src);
-		}
-	});
-	return defer.promise;
-}
-
-/** Save times */
-function get_times(files) {
-	if(!is.array(files)) {
-		return _Q([]);
-	}
-
-	var modified = ARRAY(files).map(function() {}).valueOf();
-	return ARRAY(files).map(function(file, i) {
-		if(!is.string(file)) {
-			return;
-		}
-
-		return function() {
-			return FS.stat(file).then(function(stats) {
-				debug.assert(stats).is('object');
-				modified[i] = stats.mtime.getTime();
-				return stats;
-			});
-		};
-	}).reduce(_Q.when, _Q()).then(function() {
-		return modified;
-	});
-}
-
-/**
- * Function that returns promise of a temporary directory
- */
-var mktempdir = _Q.denodeify(require('temp').mkdir);
-
-/** Returns a promise of an object with a property `file` pointing to temporary file containing the object `obj` and method `.clean()` to clean it.
- * FIXME: Convert sync methods into async
- */
-function get_object_as_temp_file(obj) {
-
-	debug.assert(obj).is('object');
-
-	/*
-	function wrap_ejs(template) {
-		return '(function() {var t = ' + template + '; return function(l) { return t(l) }}())';
-	}
-	*/
-
-	function wrap(data) {
-		debug.assert(data).is('object');
-		//if(process.env.DEBUG_MVC) {
-			//debug.log('data = ', data);
-		//}
-		var mod = copy(data);
-		mod.browser = true;
-		delete mod.filename;
-		delete mod.dirname;
-		if(!mod.views) {
-			mod.views = {};
-		}
-		var code = [
-			//'"use strict";',
-			//'require("ejs");',
-			'var mod = module.exports = ' + JSON.stringify(mod) + ';'
-		];
-		ARRAY(Object.keys(data.views)).forEach(function(view) {
-			var file = data.views[view].file;
-			code.push('mod.views[' + JSON.stringify(view) + "] = require(" + JSON.stringify(file) + ");");
-		});
-		return code.join('\n');
-	}
-
-	var result = {
-		'clean': function() {
-			return FS.rmdirIfExists(result.dir).unlinkIfExists(result.file);
-		}
-	};
-
-	//return mktempdir({
-	//	'dir': obj.tmpdir,
-	//	'prefix': 'nor-mvc-build-'
-	//}).then(function(dir) {
-	return mktempdir('nor-mvc-build-').then(function(dir) {
-		debug.assert(dir).is('string');
-		result.dir = dir;
-		var data = wrap(obj);
-		debug.assert(data).is('string');
-		result.file = PATH.resolve(dir, 'mvc.js');
-		return FS.writeFile(result.file, data, {'encoding': 'utf8'});
-	}).then(function() {
-		return result;
-	}).fail(function(err) {
-		result.clean();
-		throw err;
-	});
-}
-
-/** Build browserify bundle */
-function build_bundle(entry_file, opts) {
-
-	entry_file = PATH.resolve(entry_file);
-
-	if(process.env.DEBUG_MVC) {
-		debug.info('Building using browserify: ', entry_file);
-	}
-
-	var _cache;
-	var _b;
-	var _tmpfile;
-
-	var ret_p = _Q.fcall(function() {
-
-		if(process.env.DEBUG_MVC) {
-			debug.log('step 1');
-		}
-
-		debug.assert(entry_file).is('string');
-
-		opts = opts || {};
-		debug.assert(opts).is('object');
-
-		_cache = {
-			'modified': is.array(opts.entries) ? ARRAY(opts.entries).map(function() { }).valueOf() : [],
-			'body': undefined
-		};
-
-		if(!opts.entries) {
-			opts.entries = [];
-		}
-
-		if(enable_source_maps) {
-			opts.debug = true;
-		}
-
-		if(use_disc) {
-			opts.fullPaths = true;
-		}
-
-		//if(!opts.builtins) {
-		//	opts.builtins = require('../node_modules/browserify/lib/builtins.js');
-		//}
-
-		//opts.noparse = [
-		//	PATH.resolve(__dirname, "./search-and-require.js"),
-		//	PATH.resolve(__dirname, "./require-browserify.js")
-		//];
-
-		_b = browserify(opts);
-
-		_b.add(entry_file);
-
-		_b.ignore("disc");
-		_b.ignore("ansi"); // nor-debug uses this on node side
-		_b.ignore("temp");
-		_b.ignore("nor-fs");
-		_b.ignore("nor-express");
-		_b.ignore("browserify");
-
-		_b.ignore("search-and-require.js");
-		_b.ignore("require-browserify.js");
-
-		_b.ignore("./search-and-require.js");
-		_b.ignore("./require-browserify.js");
-
-		_b.ignore( PATH.join(__dirname, "search-and-require.js") );
-		_b.ignore( PATH.join(__dirname, "require-browserify.js") );
-
-		_b.ignore( PATH.resolve(__dirname, "./search-and-require.js") );
-		_b.ignore( PATH.resolve(__dirname, "./require-browserify.js") );
-
-		_b.ignore( require.resolve("./search-and-require.js") );
-		_b.ignore( require.resolve("./require-browserify.js") );
-
-		_b.ignore(__filename);
-
-		// Ignore node files
-		if(opts.mvc && opts.mvc._node_files) {
-			debug.assert(opts.mvc._node_files).is('array');
-
-			if(process.env.DEBUG_MVC) {
-				debug.log( 'node_files =', opts.mvc._node_files );
+			// Ignore if this is not for us
+			if(!(m && (m.type === 'build') && (m.id === job_id))) {
+				return;
 			}
 
-			ARRAY(opts.mvc._node_files).forEach(function(found) {
-				_b.ignore( found.file );
+			if(m.resolved) {
+				defer.resolve(m.body);
+			} else {
+				defer.reject(m.body);
+			}
+
+			child_builder.removeListener('message', message_listener);
+		}
+
+		child_builder.on('message', message_listener);
+
+		child_builder.send({
+			'id': job_id,
+			'entry_file': entry_file,
+			'opts': opts
+		});
+
+		return defer.promise.then(function(build) {
+			var promises = [];
+			if(build.files) {
+				if(build.files.bundle) {
+					promises.push( FS.readFile(build.files.bundle, {'encoding':'utf8'}) );
+				}
+				if(build.files.disc) {
+					promises.push( FS.readFile(build.files.disc, {'encoding':'utf8'}) );
+				}
+			}
+			return _Q.all(promises).spread(function(bundle_, disc_) {
+				debug.assert(bundle_).is('string');
+				debug.assert(disc_).ignore(undefined).is('string');
+				build.bundle = bundle_;
+				if(disc_) {
+					build.disc = disc_;
+				}
+				return build;
 			});
-		}
-
-		//_b.transform({ global: true }, 'browserify-shim');
-		_b.transform({ global: true }, 'browserify-ejs');
-		_b.transform({ global: true }, 'envify');
-		//_b.transform({ global: true }, 'brfs');
-		//_b.transform({ global: true }, 'ejsify');
-
-		if(minimize_bundle) {
-			_b.transform({ global: true }, 'uglifyify');
-		}
-
-		if(process.env.DEBUG_MVC) {
-			debug.log('step 2');
-		}
-
-		_tmpfile = {'clean': function() {}};
-
-		if(!opts.mvc) { return; }
-
-		// 
-		return get_object_as_temp_file(opts.mvc).then(function(result) {
-			_tmpfile = result;
-			//_b.add(result.file);
-			_b.require(result.file, {'expose':'nor-mvc-self'});
 		});
 
-	}).then(function() {
-		return get_times(opts.entries);
-	}).then(function(modified) {
-		if(process.env.DEBUG_MVC) {
-			debug.log('modified = ', modified);
-			debug.log('_cache = ', _cache);
-		}
-
-		var no_cached_bundle = _cache.body === undefined;
-
-		var files_changed = !!(ARRAY(modified).map(function(d, i) {
-			return d !== _cache.modified[i];
-		}).some(function(x) {
-			return x === true;
-		}));
-
-		var lets_build_bundle = !!( no_cached_bundle || files_changed );
-
-		if(process.env.DEBUG_MVC) {
-			debug.log('no_cached_bundle = ', no_cached_bundle);
-			debug.log('files_changed = ', files_changed);
-			debug.log('lets_build_bundle = ', lets_build_bundle);
-		}
-
-		if(!lets_build_bundle) {
-			return _cache.body;
-		}
-
-		return do_browserify_bundle(_b, {
-			'debug': enable_source_maps,
-			'fullPaths': use_disc
-		}).then(function(body) {
-			_cache.modified = modified;
-			_cache.body = body;
-			return body;
-		});
-
-	}).then(function(body) {
-		if(!process.env.DISABLE_MVC_MESSAGES) {
-			debug.info('Browserify build successful for ', entry_file);
-		}
-
-		return body;
-	}).fail(function(err) {
-		if(!process.env.DISABLE_MVC_ERRORS) {
-			debug.error('Browserify build FAILED for file ', entry_file, ': ', err);
-		}
-		return _Q.reject(err);
-	}).fin(function() {
-		_tmpfile.clean();
-	});
-
-	_build_promises[entry_file] = ret_p;
-
-	return ret_p;
-}
-
-/** Build visualisation of bundle using disc */
-function build_disc(bundles) {
-
-	if(process.env.DEBUG_MVC) {
-		debug.info('Building HTML visualization for the bundle using disc...');
-	}
-
-	var defer = _Q.defer();
-	function cb(err, html) {
-		if(err) {
-			defer.reject(err);
-			return;
-		}
-		defer.resolve(html);
-	}
-	DISC.bundle(bundles, cb);
-
-	return defer.promise.then(function(html) {
-		if(!process.env.DISABLE_MVC_MESSAGES) {
-			debug.info('HTML visualization for bundle (using disc) successful!');
-		}
-		return html;
-	}).fail(function(err) {
-		if(!process.env.DISABLE_MVC_ERRORS) {
-			debug.error('HTML visualization for bundle (using disc) FAILED: ', err);
-		}
-		return _Q.reject(err);
 	});
 }
+
+/** Object that contains all the builds by entry_file */
+var _builds = {};
 
 /** Returns a predicate function for testing path extensions */
 var require_browserify = module.exports = function require_browserify(entry_file, opts) {
-	var bundle = build_bundle(entry_file, opts);
 
-	var disc_promise;
-	if(use_disc) {
-		disc_promise = bundle.then(function(body) {
-			//console.log(body);
-			return build_disc([body]);
+	var _build;
+	if(_builds.hasOwnProperty(entry_file)) {
+		_build = _builds[entry_file];
+	} else {
+		_build = child_build(entry_file, opts).then(function(build) {
+			debug.info('Build features: ' + build.features );
+			debug.log('shasums: ' + JSON.stringify(build.shasums, null, 2));
+			return build;
 		});
+		_builds[entry_file] = _build;
 	}
 
-	function step_2(req, res) {
+	function require_browserify_2(req, res) {
+		return _build.then(function(build) {
+			var url, extname;
 
-		var url, extname;
-
-		if(use_disc) {
-			url = require('url').parse(req.url);
-			extname = PATH.extname(url.path);
-
-			if(extname === '.html') {
-				return disc_promise.then(function(html) {
+			if(build.opts.use_disc) {
+				url = URL.parse(req.url);
+				extname = PATH.extname(url.path);
+				if(extname === '.html') {
 					res.header('content-type', 'text/html; charset=UTF-8');
-					res.send(html);
-				});
+					res.send(build.disc);
+					return;
+				}
 			}
-		}
 
-		return bundle.then(function(body) {
 			/* FIXME: Please note: application/javascript would be 'right' but apparently IE6-8 do not support it. Not tested, though. */
 			res.header('content-type', 'application/javascript; charset=UTF-8');
-			res.send(body);
+			res.send(build.bundle);
 		});
 	}
 
 	return {
-		'USE': step_2
+		'USE': require_browserify_2
 	};
 };
 
 // Export
-require_browserify.readiness = get_promise_of_build_success;
+require_browserify.readiness = function(entry_file) {
+	return _Q.fcall(function() {
+		if(!_builds.hasOwnProperty(entry_file)) {
+			throw new TypeError("No build started for " + entry_file);
+		}
+		return _builds[entry_file];
+	});
+};
 
 /* EOF */
