@@ -50,7 +50,7 @@ function get_build_features() {
 /** Calculate shasum */
 function get_shasum(data) {
 	debug.assert(data).is('string');
-	debug.log('data.length = ', data.length);
+	//debug.log('data.length = ', data.length);
 	var shasum = crypto.createHash('sha1');
 	shasum.update(data, 'utf8');
 	return shasum.digest('hex');
@@ -95,7 +95,7 @@ function save_build(build) {
 			return FS.writeFile(result.files.disc, build.disc, {'encoding': 'utf8'});
 		}
 	}).then(function() {
-		debug.log('result = ', result);
+		//debug.log('result = ', result);
 		return result;
 	}).fail(function(err) {
 		clean_result(result);

@@ -39,7 +39,7 @@ var get_mvc_as_file = module.exports = function get_object_as_temp_file(mvc) {
 
 	debug.assert(mvc).is('object');
 
-	debug.log("views: "+ Object.keys(mvc.views) );
+	//debug.log("views: "+ Object.keys(mvc.views) );
 
 	function wrap(data) {
 		debug.assert(data).is('object');

@@ -19,6 +19,27 @@ var UUID = require('node-uuid');
 var get_mvc_as_file = require('./get-mvc-as-file.js');
 var BUILD = require('./build/build.js');
 
+/** Copy buffer in smaller chunks into HTTP response object */
+function copy_buffer_to_response(data, res) {
+
+	debug.assert(data).is('object').instanceOf(Buffer);
+	debug.assert(res).is('object');
+
+	var chunk_size = 1024;
+	var offset = 0;
+
+	function send_chunk() {
+		var offset_end = offset + 1024;
+		if(offset_end > data.length) {
+			offset_end = data.length;
+		}
+		var chunk = data.slice(offset, offset + 1024)
+		res.write(chunk);
+	}
+
+
+}
+
 /** Build browserify bundle in child process */
 function child_build(entry_file, opts_) {
 	var opts = copy(opts_);
@@ -68,9 +89,9 @@ function child_build(entry_file, opts_) {
 			return _Q.all(promises).spread(function(bundle_, disc_) {
 				debug.assert(bundle_).is('string');
 				debug.assert(disc_).ignore(undefined).is('string');
-				build.bundle = bundle_;
+				build.bundle = new Buffer(bundle_, 'utf8');
 				if(disc_) {
-					build.disc = disc_;
+					build.disc = new Buffer(disc_, 'utf8');
 				}
 
 				return BUILD.clean(build);
@@ -94,14 +115,18 @@ var require_browserify = module.exports = function require_browserify(entry_file
 	} else {
 		_build = child_build(entry_file, opts).then(function(build) {
 			debug.info('Build features: ' + build.features );
-			debug.log('shasums: ' + JSON.stringify(build.shasums, null, 2));
+			//debug.log('shasums: ' + JSON.stringify(build.shasums, null, 2));
 			return build;
 		});
 		_builds[entry_file] = _build;
 	}
 
 	function require_browserify_2(req, res) {
+		//var time = process.hrtime();
+		//var diff = process.hrtime(time);
+		//debug.log('benchmark took ', diff[0], ' / ', diff[1], ' nanoseconds');
 		return _build.then(function(build) {
+
 			var url, extname;
 
 			if(build.opts.use_disc) {

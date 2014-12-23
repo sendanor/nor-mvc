@@ -181,7 +181,7 @@ module.exports = function build_bundle(entry_file, opts) {
 		//});
 
 		_tmpfile = opts.mvc;
-		debug.log('opts.mvc.file = ', opts.mvc.file);
+		//debug.log('opts.mvc.file = ', opts.mvc.file);
 		_b.require(opts.mvc.file, {'expose':'nor-mvc-self'});
 
 	}).then(function() {
