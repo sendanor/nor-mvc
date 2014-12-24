@@ -12,6 +12,7 @@ var debug = require('nor-debug');
 var is = require('nor-is');
 var PATH = require('path');
 var FS = require('nor-fs');
+var ARRAY = require('nor-array');
 //var require_browserify; 
 //var require_browserify = require('./require-browserify.js');
 
@@ -140,13 +141,13 @@ function search_and_collect(path, opts) {
 
 	debug.assert(result).is('object');
 
-	var files = FS.sync.readdir(path).map(function join_path(file) {
+	var files = ARRAY(FS.sync.readdir(path)).map(function join_path(file) {
 		return PATH.join(path, file);
-	});
+	}).valueOf();
 
 	// Handle files
 	var logic = opts.require_sub_extension ? and : or;
-	files.filter(logic(has_extension(primary_ext), sub_ext ? has_sub_extension(sub_ext) : nul )).forEach(function each(file) {
+	ARRAY(files).filter(logic(has_extension(primary_ext), sub_ext ? has_sub_extension(sub_ext) : nul )).forEach(function each(file) {
 		var name = PATH.basename(file, PATH.extname(file));
 		if( sub_ext && has_extension(sub_ext)(name) ) {
 			name = PATH.basename(name, sub_ext);
@@ -167,7 +168,7 @@ function search_and_collect(path, opts) {
 	});
 
 	// Handle sub directories
-	files.filter(is_directory).forEach(function each_2(dir) {
+	ARRAY(files).filter(is_directory).forEach(function each_2(dir) {
 		var name = PATH.basename(dir);
 		if(parent_name) {
 			name = [parent_name, name].join('.');
@@ -226,12 +227,12 @@ function search_and_require(path, opts) {
 
 	debug.assert(result).is('object');
 
-	var files = FS.sync.readdir(path).map(function join_path(file) {
+	var files = ARRAY(FS.sync.readdir(path)).map(function join_path(file) {
 		return PATH.join(path, file);
-	});
+	}).valueOf();
 
 	var logic = opts.require_sub_extension ? and : or;
-	files.filter(logic(has_extension(primary_ext), sub_ext ? has_sub_extension(sub_ext) : nul )).forEach(function each(file) {
+	ARRAY(files).filter(logic(has_extension(primary_ext), sub_ext ? has_sub_extension(sub_ext) : nul )).forEach(function each(file) {
 		var name = PATH.basename(file, PATH.extname(file));
 		if( sub_ext && has_extension(sub_ext)(name) ) {
 			name = PATH.basename(name, sub_ext);
@@ -252,7 +253,7 @@ function search_and_require(path, opts) {
 		result[name].file = file;
 	});
 
-	files.filter(is_directory).forEach(function each_2(dir) {
+	ARRAY(files).filter(is_directory).forEach(function each_2(dir) {
 		var name = PATH.basename(dir);
 		if(parent_name) {
 			name = [parent_name, name].join('.');
