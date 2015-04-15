@@ -12,3 +12,8 @@ Documentation
 -------------
 
 * [Context](//github.com/sendanor/nor-mvc/wiki/Context)
+
+Commercial Support
+------------------
+
+You can buy commercial support from [Sendanor](http://sendanor.com/software).
